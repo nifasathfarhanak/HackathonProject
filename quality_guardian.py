@@ -31,7 +31,7 @@ def validate_structure(test_case: dict) -> tuple[bool, str]:
 def critique_plausibility(test_case: dict) -> tuple[bool, str]:
     """Uses a live AI call to check if the test case is logically plausible."""
     if not gemini_model:
-        return True, "Plausibility check skipped: Vertex AI model not initialized."
+        return True, "Plausibility check skipped: AI model not initialized."
 
     prompt = f"""As a QA Reviewer, analyze the following test case. Are the steps clear, logical, and easy to follow? Does the expected result directly test the objective in the description? Based on your analysis, is this a plausible and well-formed test case? Answer with only the word "Yes" or "No", followed by a brief one-sentence justification."""
     try:
@@ -48,7 +48,7 @@ def critique_plausibility(test_case: dict) -> tuple[bool, str]:
 def validate_rtm_link(test_case: dict) -> tuple[bool, str]:
     """Uses a live AI call to validate the link between the test case and the compliance rule."""
     if not gemini_model:
-        return True, "RTM validation skipped: Vertex AI model not initialized."
+        return True, "RTM validation skipped: AI model not initialized."
 
     prompt = f"""As a Compliance Auditor, analyze the following link between a test case and a compliance rule. Test Case Description: "{test_case.get('description')}". Compliance Rule Mapping: "{test_case.get('rtm_compliance_mapping')}". Is there a clear and logical connection between this test case and this compliance rule? Answer with only the word "Yes" or "No", followed by a brief one-sentence justification."""
     try:

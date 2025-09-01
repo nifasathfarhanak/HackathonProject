@@ -13,8 +13,9 @@ from fpdf import FPDF
 # Load environment variables from .env file
 load_dotenv()
 
-# Corrected: Import the new simplified function from the generator
+# Corrected: Use absolute imports as 'src' is on the path
 from document_parser import parse_document
+# Corrected: Import the new simplified function
 from test_generator import generate_test_cases_from_chunk
 from alm_integrator import create_jira_issues
 from quality_guardian import run_quality_checks
@@ -123,6 +124,15 @@ def create_txt(test_cases, headers):
         output.write("-" * 30 + "\n")
     return io.BytesIO(output.getvalue().encode('utf-8'))
 
+# New helper function for the fully parallel pipeline
+def generate_and_check(chunk):
+    """A single task that generates test cases from a chunk and runs quality checks."""
+    test_cases = generate_test_cases_from_chunk(chunk)
+    if not test_cases:
+        return [] # Return empty list if generation fails
+    checked_test_cases = run_quality_checks(test_cases)
+    return checked_test_cases
+
 @app.route('/')
 def index():
     if 'user_id' not in session:
@@ -140,50 +150,30 @@ def handle_generate_and_analyze():
         extracted_text = parse_document(file.filename, file_content)
         document_cache[session['user_id']] = extracted_text
         
-        print("--- Step 1: Chunking document... ---")
+        print("--- Step 1: Splitting document into chunks... ---")
         text_chunks = [chunk for chunk in extracted_text.split('\n\n') if len(chunk.strip()) > 100]
         print(f"--- Found {len(text_chunks)} chunks. Processing in parallel... ---")
 
         all_test_cases = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-            # Map each chunk directly to the new, simplified generation function
-            future_to_chunk = {executor.submit(generate_test_cases_from_chunk, chunk): chunk for chunk in text_chunks}
+            future_to_chunk = {executor.submit(generate_and_check, chunk): chunk for chunk in text_chunks}
             for future in concurrent.futures.as_completed(future_to_chunk):
                 try:
-                    test_cases_for_chunk = future.result()
-                    if test_cases_for_chunk:
-                        all_test_cases.extend(test_cases_for_chunk)
+                    checked_test_cases = future.result()
+                    if checked_test_cases:
+                        all_test_cases.extend(checked_test_cases)
                 except Exception as exc:
-                    print(f"A chunk generation failed with an exception: {exc}")
+                    print(f"A chunk processing task failed with an exception: {exc}")
 
         if not all_test_cases:
             return jsonify({'error': 'The AI did not generate any valid test cases.'}), 500
 
-        print("--- Step 2: Running AI Quality Guardian checks in parallel... ---")
-        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-            results = executor.map(lambda tc: run_quality_checks([tc]), all_test_cases)
-        final_test_cases = [item for sublist in results for item in sublist]
         print("--- All processing complete. ---")
-
-        return jsonify({'extracted_text': extracted_text, 'test_cases': final_test_cases})
+        return jsonify({'extracted_text': extracted_text, 'test_cases': all_test_cases})
 
     except Exception as e:
         print(f"Error during generation: {e}")
         return jsonify({'error': str(e)}), 500
-
-@app.route('/chat', methods=['POST'])
-def handle_chat():
-    from test_generator import gemini_model
-    data = request.get_json()
-    question = data.get('question')
-    user_id = session.get('user_id')
-    if not question: return jsonify({'error': 'No question provided'}), 400
-    if not user_id or user_id not in document_cache: return jsonify({'error': 'Document context not found.'}), 400
-    context = document_cache[user_id]
-    if not gemini_model: return jsonify({'error': 'AI Model not initialized'}), 500
-    prompt = f"Based on the following document, answer the user's question.\n\nDOCUMENT:\n{context}\n\nQUESTION:\n{question}"
-    response = gemini_model.generate_content(prompt)
-    return jsonify({'answer': response.text})
 
 @app.route('/download', methods=['POST'])
 def handle_download():
