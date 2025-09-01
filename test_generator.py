@@ -31,25 +31,46 @@ def extract_json_from_string(text: str) -> str:
         return text[start_index:end_index]
     return None
 
-def generate_test_cases_from_chunk(text_chunk: str) -> list:
-    """Generates a list of test case dicts from a chunk of a requirement document."""
-    if not gemini_model:
-        raise ConnectionError("Google AI model not initialized.")
+def extract_requirements_from_chunk(text_chunk: str) -> list[str]:
+    """Uses a robust, two-attempt strategy to extract requirements as a simple list."""
+    if not gemini_model: raise ConnectionError("Google AI model not initialized.")
+    
+    prompt = f"""Read the following text from a software specification document. Identify and extract any specific, actionable software requirements. List each requirement as a simple bullet point, starting with '*'. If you find no requirements, respond with only the text "No requirements found.".\n\n--- TEXT CHUNK ---\n{text_chunk}\n--- END CHUNK ---"""
 
-    # The prompt now asks the AI to find and process all requirements within the chunk.
-    prompt = f"""Your task is to act as a senior QA engineer. Read the following chunk of a software requirement document. Identify any and all specific, actionable requirements within this text. For each requirement you find, generate a detailed set of test cases.
+    for attempt in range(2):
+        try:
+            response = gemini_model.generate_content(prompt)
+            if "No requirements found." in response.text:
+                return []
+            
+            # Use regex to find all lines that start with a bullet point (*, -, •)
+            requirements = re.findall(r'^[\*\-•]\s+(.*)', response.text, re.MULTILINE)
+            if requirements:
+                return requirements
+        except Exception as e:
+            print(f"    -> Requirement extraction attempt {attempt + 1} failed with an error: {e}")
+        
+        print(f"    -> Retrying requirement extraction for chunk...")
+        time.sleep(1)
 
-    **Document Chunk:**
-    {text_chunk}
+    print("    -> All attempts to extract requirements failed for this chunk.")
+    return []
+
+def generate_test_cases_for_requirement(requirement: str) -> list:
+    """Generates a list of test case dicts for a single requirement."""
+    if not gemini_model: raise ConnectionError("Google AI model not initialized.")
+
+    prompt = f"""Your task is to generate a JSON array of test cases for the following single software requirement.
+
+    **Software Requirement:**
+    {requirement}
 
     **Instructions:**
-    1.  Carefully read the entire text chunk.
-    2.  Identify all distinct functional or non-functional requirements.
-    3.  For each requirement, create one or more test case objects.
-    4.  Combine all test case objects from this chunk into a single JSON array.
-    5.  Each test case object in the array must have the fields: 'test_case_id', 'requirement_id', 'description', 'test_type', 'priority', 'steps', 'expected_result', and 'rtm_compliance_mapping'.
-    6.  If you find no actionable requirements in this chunk, you MUST return an empty JSON array `[]`.
-    7.  Your final output must be ONLY the JSON array. Do not include any other text, explanation, or markdown formatting.
+    1.  Create one or more detailed test case objects for this single requirement.
+    2.  Combine all test case objects into a single JSON array.
+    3.  Each test case object in the array must have the fields: 'test_case_id', 'requirement_id', 'description', 'test_type', 'priority', 'steps', 'expected_result', and 'rtm_compliance_mapping'.
+    4.  If you cannot generate a meaningful test case, you MUST return an empty JSON array `[]`.
+    5.  Your final output must be ONLY the JSON array. Do not include any other text, explanation, or markdown formatting.
     """
 
     for attempt in range(2):
@@ -58,15 +79,8 @@ def generate_test_cases_from_chunk(text_chunk: str) -> list:
             json_string = extract_json_from_string(response.text)
             if json_string:
                 return json.loads(json_string)
-            else:
-                print(f"    -> Attempt {attempt + 1} failed: No JSON found in response for chunk.")
-        except json.JSONDecodeError as e:
-            print(f"    -> Attempt {attempt + 1} failed: Could not decode JSON. Error: {e}")
         except Exception as e:
-            print(f"    -> Attempt {attempt + 1} failed with an unexpected error: {e}")
-        
-        print("    -> Retrying chunk...")
+            print(f"    -> Test case generation attempt {attempt + 1} failed for requirement: '{requirement[:30]}...'")
         time.sleep(1)
 
-    print("    -> All attempts failed for this chunk. Returning empty list.")
     return []

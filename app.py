@@ -20,7 +20,7 @@ from alm_integrator import create_jira_issues
 from quality_guardian import run_quality_checks
 
 # Initialize the Flask application
-app = Flask(__name__, template_folder='templates', static_folder='static')
+app = Flask(__name__, template_folder='templates', static_folder='../static')
 app.secret_key = os.urandom(24)
 
 document_cache = {}
@@ -123,6 +123,15 @@ def create_txt(test_cases, headers):
         output.write("-" * 30 + "\n")
     return io.BytesIO(output.getvalue().encode('utf-8'))
 
+# New helper function for the fully parallel pipeline
+def generate_and_check(chunk):
+    """A single task that generates test cases from a chunk and runs quality checks."""
+    test_cases = generate_test_cases_from_chunk(chunk)
+    if not test_cases:
+        return [] # Return empty list if generation fails
+    checked_test_cases = run_quality_checks(test_cases)
+    return checked_test_cases
+
 @app.route('/')
 def index():
     if 'user_id' not in session:
@@ -137,34 +146,29 @@ def handle_generate_and_analyze():
     if file.filename == '': return jsonify({'error': 'No selected file'}), 400
     try:
         file_content = file.read()
-        extracted_text = parse_document(file.filename, file_content)
+        text_chunks = parse_document(file.filename, file_content)
+        
+        extracted_text = "\n\n".join(text_chunks)
         document_cache[session['user_id']] = extracted_text
         
-        print("--- Step 1: Extracting requirements from document... ---")
-        text_chunks = [chunk for chunk in extracted_text.split('\n\n') if len(chunk.strip()) > 100]
-        all_test_cases = []
-        
         print(f"--- Found {len(text_chunks)} chunks. Processing in parallel... ---")
+
+        all_test_cases = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-            future_to_chunk = {executor.submit(generate_test_cases_from_chunk, chunk): chunk for chunk in text_chunks}
+            future_to_chunk = {executor.submit(generate_and_check, chunk): chunk for chunk in text_chunks}
             for future in concurrent.futures.as_completed(future_to_chunk):
                 try:
-                    test_cases_for_chunk = future.result()
-                    if test_cases_for_chunk:
-                        all_test_cases.extend(test_cases_for_chunk)
+                    checked_test_cases = future.result()
+                    if checked_test_cases:
+                        all_test_cases.extend(checked_test_cases)
                 except Exception as exc:
-                    print(f"A chunk generation failed with an exception: {exc}")
+                    print(f"A chunk processing task failed with an exception: {exc}")
 
         if not all_test_cases:
             return jsonify({'error': 'The AI did not generate any valid test cases.'}), 500
 
-        print("--- Step 2: Running AI Quality Guardian checks in parallel... ---")
-        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-            results = executor.map(lambda tc: run_quality_checks([tc]), all_test_cases)
-        final_test_cases = [item for sublist in results for item in sublist]
         print("--- All processing complete. ---")
-
-        return jsonify({'extracted_text': extracted_text, 'test_cases': final_test_cases})
+        return jsonify({'extracted_text': extracted_text, 'test_cases': all_test_cases})
 
     except Exception as e:
         print(f"Error during generation: {e}")
@@ -199,6 +203,5 @@ def handle_export_to_jira():
         return jsonify({'confirmations': confirmations})
     except Exception as e: return jsonify({'error': str(e)}), 500
 
-# This is the crucial block that allows the app to be run directly
 if __name__ == '__main__':
     app.run(debug=True, port=5001)

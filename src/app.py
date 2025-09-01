@@ -147,11 +147,13 @@ def handle_generate_and_analyze():
     if file.filename == '': return jsonify({'error': 'No selected file'}), 400
     try:
         file_content = file.read()
-        extracted_text = parse_document(file.filename, file_content)
+        # Corrected: parse_document now returns a list of chunks
+        text_chunks = parse_document(file.filename, file_content)
+        
+        # Reconstruct the full text for display and caching
+        extracted_text = "\n\n".join(text_chunks)
         document_cache[session['user_id']] = extracted_text
         
-        print("--- Step 1: Splitting document into chunks... ---")
-        text_chunks = [chunk for chunk in extracted_text.split('\n\n') if len(chunk.strip()) > 100]
         print(f"--- Found {len(text_chunks)} chunks. Processing in parallel... ---")
 
         all_test_cases = []
