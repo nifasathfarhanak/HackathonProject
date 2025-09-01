@@ -1,0 +1,261 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-Powered Test Case Generator</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>AI-Powered Test Case Generator (TCGS)</h1>
+            <p>Upload a software requirement document to begin.</p>
+        </header>
+
+        <div class="main-content">
+            <div class="upload-section">
+                <h2>1. Upload Document</h2>
+                <form id="upload-form" enctype="multipart/form-data">
+                    <input type="file" id="file-input" name="requirement_file" accept=".pdf,.docx,.xml,.md,.txt" required>
+                    <button type="submit">Generate & Analyze Test Cases</button>
+                </form>
+            </div>
+
+            <div id="loading" class="hidden">
+                <div class="spinner"></div>
+                <!-- Simplified loading message -->
+                <p id="loading-message">Processing... This may take a few moments as the AI generates and validates the test cases.</p>
+            </div>
+
+            <div id="results" class="hidden">
+                <div class="results-grid">
+                    <div class="grid-item">
+                        <h2>Extracted Text</h2>
+                        <textarea id="extracted-text" readonly></textarea>
+                    </div>
+                    <div class="grid-item">
+                        <h2>Generated Test Cases <span class="quality-legend">(<span class="highlight-fail"></span>Needs Review)</span></h2>
+                        <div id="test-case-table-container"></div>
+                    </div>
+                </div>
+
+                <div id="agent-builder-chat-container" class="chat-section">
+                    <h2>Chat with Document (Powered by Agent Builder)</h2>
+                    <div id="chat-history"></div>
+                    <form id="chat-form">
+                        <input type="text" id="chat-input" placeholder="Ask a question about the document..." required>
+                        <button type="submit">Send</button>
+                    </form>
+                </div>
+
+                <div class="download-section">
+                    <h2>Download Test Cases</h2>
+                    <div id="download-buttons">
+                        <button class="download-btn" data-format="csv">Download as CSV</button>
+                        <button class="download-btn" data-format="xlsx">Download as XLSX</button>
+                        <button class="download-btn" data-format="pdf">Download as PDF</button>
+                        <button class="download-btn" data-format="txt">Download as TXT</button>
+                    </div>
+                </div>
+                
+                <div class="jira-section">
+                    <h2>Export to Jira (Optional)</h2>
+                    <form id="jira-form">
+                        <div class="jira-grid">
+                            <input type="text" id="jira-server" placeholder="Jira Server URL (e.g., https://your-domain.atlassian.net)">
+                            <input type="email" id="jira-email" placeholder="Jira Email">
+                            <input type="password" id="jira-token" placeholder="Jira API Token">
+                            <input type="text" id="jira-project-key" placeholder="Jira Project Key (e.g., PROJ)">
+                        </div>
+                        <button type="submit">Create Jira Issues</button>
+                    </form>
+                    <div id="jira-status"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const uploadForm = document.getElementById('upload-form');
+        const loadingDiv = document.getElementById('loading');
+        const loadingMessage = document.getElementById('loading-message');
+        const resultsDiv = document.getElementById('results');
+        const extractedTextEl = document.getElementById('extracted-text');
+        const testCaseContainer = document.getElementById('test-case-table-container');
+
+        let generatedTestCases = [];
+
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('file-input');
+            if (!fileInput.files.length) { alert('Please select a file.'); return; }
+
+            const formData = new FormData(uploadForm);
+
+            resultsDiv.classList.add('hidden');
+            loadingDiv.classList.remove('hidden');
+            loadingMessage.textContent = 'Processing... This may take a few moments as the AI generates and validates the test cases.';
+
+            try {
+                // Make a single call to the new, efficient backend endpoint
+                const response = await fetch('/generate_and_analyze', { method: 'POST', body: formData });
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'An unknown error occurred.');
+                }
+
+                extractedTextEl.value = data.extracted_text;
+                generatedTestCases = data.test_cases;
+                renderTestCases(generatedTestCases);
+                resultsDiv.classList.remove('hidden');
+
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            } finally {
+                loadingDiv.classList.add('hidden');
+            }
+        });
+
+        // ... (The rest of the JavaScript functions remain the same) ...
+        function formatRtm(rtm) {
+            if (!rtm) return 'N/A';
+            if (typeof rtm === 'string') return rtm;
+            if (typeof rtm === 'object') {
+                const items = Array.isArray(rtm) ? rtm : [rtm];
+                return items.map(item => item.rule_id || JSON.stringify(item)).join(', ');
+            }
+            return 'Invalid Format';
+        }
+
+        function renderTestCases(testCases) {
+            const table = document.createElement('table');
+            table.innerHTML = `
+                <thead>
+                    <tr>
+                        <th>Test Case ID</th>
+                        <th>Requirement ID</th>
+                        <th>Description</th>
+                        <th>Test Type</th>
+                        <th>Priority</th>
+                        <th>RTM Compliance Mapping</th>
+                        <th>Steps</th>
+                        <th>Expected Result</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${testCases.map(tc => {
+                        const assessment = tc.quality_assessment || { passed: true, checks: [] };
+                        const failedChecks = assessment.checks.filter(c => !c.passed);
+                        const rowClass = !assessment.passed ? 'quality-fail' : '';
+                        const tooltip = !assessment.passed ? `Quality Issues Found:\n${failedChecks.map(c => `- ${c.check}: ${c.notes}`).join('\n')}` : 'Quality check passed.';
+                        
+                        return `
+                        <tr class="${rowClass}" title="${tooltip}">
+                            <td>${tc.test_case_id || 'N/A'}</td>
+                            <td>${tc.requirement_id || 'N/A'}</td>
+                            <td>${tc.description || 'N/A'}</td>
+                            <td>${tc.test_type || 'N/A'}</td>
+                            <td>${tc.priority || 'N/A'}</td>
+                            <td>${formatRtm(tc.rtm_compliance_mapping)}</td>
+                            <td><ol>${(tc.steps || []).map(step => `<li>${step}</li>`).join('')}</ol></td>
+                            <td>${tc.expected_result || 'N/A'}</td>
+                        </tr>
+                    `}).join('')}
+                </tbody>
+            `;
+            document.getElementById('test-case-table-container').innerHTML = '';
+            document.getElementById('test-case-table-container').appendChild(table);
+        }
+        const jiraForm = document.getElementById('jira-form');
+        const jiraStatusDiv = document.getElementById('jira-status');
+        const downloadButtonsDiv = document.getElementById('download-buttons');
+        const chatForm = document.getElementById('chat-form');
+        const chatInput = document.getElementById('chat-input');
+        const chatHistory = document.getElementById('chat-history');
+
+        function appendMessage(text, sender, citations = []) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('chat-message', sender);
+            messageDiv.innerHTML = text;
+
+            if (citations.length > 0) {
+                const citationsDiv = document.createElement('div');
+                citationsDiv.classList.add('citations');
+                let citationsHtml = '<strong>Sources:</strong><ul>';
+                citations.forEach(cit => {
+                    citationsHtml += `<li>${cit.content.substring(0, 100)}...</li>`;
+                });
+                citationsHtml += '</ul>';
+                citationsDiv.innerHTML = citationsHtml;
+                messageDiv.appendChild(citationsDiv);
+            }
+
+            chatHistory.appendChild(messageDiv);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const userQuestion = chatInput.value;
+            if (!userQuestion.trim()) return;
+            appendMessage(userQuestion, 'user');
+            chatInput.value = '';
+            appendMessage('...', 'bot-loading');
+            try {
+                const response = await fetch('/agent_builder_chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: userQuestion }) });
+                const data = await response.json();
+                document.querySelector('.bot-loading').remove();
+                if (!response.ok) { throw new Error(data.error || 'An unknown error occurred.'); }
+                appendMessage(data.answer, 'bot', data.citations);
+            } catch (error) {
+                document.querySelector('.bot-loading').remove();
+                appendMessage(`Error: ${error.message}`, 'bot-error');
+            }
+        });
+
+        downloadButtonsDiv.addEventListener('click', (e) => {
+            if (e.target.classList.contains('download-btn')) {
+                const format = e.target.dataset.format;
+                fetch(`/download?format=${format}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ test_cases: generatedTestCases }) })
+                .then(res => {
+                    if (!res.ok) { return res.json().then(err => { throw new Error(err.error) }); }
+                    const disposition = res.headers.get('Content-Disposition');
+                    const filenameMatch = disposition && disposition.match(/filename="?(.+)"?/);
+                    const filename = filenameMatch ? filenameMatch[1] : `test-cases.${format}`;
+                    return res.blob().then(blob => ({ blob, filename }));
+                })
+                .then(({ blob, filename }) => {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                })
+                .catch(error => alert(`Download failed: ${error.message}`));
+            }
+        });
+
+        jiraForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const jiraConfig = { server: document.getElementById('jira-server').value, email: document.getElementById('jira-email').value, token: document.getElementById('jira-token').value, project_key: document.getElementById('jira-project-key').value, test_cases: generatedTestCases };
+            if (!jiraConfig.server || !jiraConfig.email || !jiraConfig.token || !jiraConfig.project_key) { alert('Please fill in all Jira configuration details.'); return; }
+            jiraStatusDiv.innerHTML = '<p>Creating issues in Jira...</p>';
+            try {
+                const response = await fetch('/export_to_jira', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(jiraConfig) });
+                const data = await response.json();
+                if (!response.ok) { throw new Error(data.error || 'An unknown error occurred.'); }
+                let confirmationsHtml = '<h3>Jira Export Status</h3>';
+                data.confirmations.forEach(msg => { confirmationsHtml += `<p class="jira-confirmation">${msg}</p>`; });
+                jiraStatusDiv.innerHTML = confirmationsHtml;
+            } catch (error) { jiraStatusDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`; }
+        });
+    </script>
+</body>
+</html>

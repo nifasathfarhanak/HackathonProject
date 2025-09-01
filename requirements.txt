@@ -1,0 +1,12 @@
+Flask
+google-cloud-discoveryengine
+# Switch to the enterprise-grade Vertex AI SDK for higher quotas
+google-cloud-aiplatform
+pypdf
+python-docx
+markdown
+python-dotenv
+jira
+openpyxl
+fpdf2
+waitress
