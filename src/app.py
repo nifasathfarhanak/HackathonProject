@@ -17,8 +17,8 @@ load_dotenv()
 from document_parser import parse_document
 # Corrected: Import the new simplified function
 from test_generator import generate_test_cases_from_chunk, edit_test_cases_with_ai
-from alm_integrator import create_jira_issues
-from quality_guardian import run_quality_checks
+from alm_integrator import create_jira_issues # Keep this import
+# from quality_guardian import run_quality_checks # Temporarily disable quality checks
 
 # Initialize the Flask application
 app = Flask(__name__, template_folder='../templates', static_folder='../static')
@@ -130,8 +130,8 @@ def generate_and_check(chunk):
     test_cases = generate_test_cases_from_chunk(chunk)
     if not test_cases:
         return [] # Return empty list if generation fails
-    checked_test_cases = run_quality_checks(test_cases)
-    return checked_test_cases
+    # checked_test_cases = run_quality_checks(test_cases) # Temporarily disable quality checks
+    return test_cases # Return raw test cases without quality checks
 
 @app.route('/')
 def index():
@@ -171,7 +171,49 @@ def handle_generate_and_analyze():
             return jsonify({'error': 'The AI did not generate any valid test cases.'}), 500
 
         print("--- All processing complete. ---")
-        return jsonify({'extracted_text': extracted_text, 'test_cases': all_test_cases})
+        
+        # --- Automatic Jira Export ---
+        jira_confirmations = None
+        jira_error = None
+        if request.form.get('jira_auto_export'):
+            jira_server = request.form.get('jira_server')
+            jira_email = request.form.get('jira_email')
+            jira_token = request.form.get('jira_token')
+            jira_project_key = request.form.get('jira_project_key')
+            is_zephyr_api_integration = request.form.get('is_zephyr_api_integration') == 'true' # Get Zephyr API integration flag
+            zephyr_api_token = request.form.get('zephyr_api_token') # Get Zephyr API Token
+
+            print(f"--- DEBUG: Jira Auto-Export Request ---\n  Server: {jira_server}\n  Email: {jira_email}\n  Project Key: {jira_project_key}\n  Is Zephyr API Integration: {is_zephyr_api_integration}\n  Zephyr API Token: {'*' * len(zephyr_api_token) if zephyr_api_token else 'N/A'}")
+
+            if jira_server and jira_email and jira_token and jira_project_key:
+                try:
+                    print("--- Attempting automatic Jira export... ---")
+                    jira_confirmations = create_jira_issues(
+                        jira_server=jira_server,
+                        jira_email=jira_email,
+                        jira_token=jira_token,
+                        project_key=jira_project_key,
+                        test_cases=all_test_cases,
+                        is_zephyr_api_integration=is_zephyr_api_integration, # Pass the Zephyr API integration flag
+                        zephyr_api_token=zephyr_api_token # Pass the Zephyr API Token
+                    )
+                except Exception as e:
+                    print(f"Error during automatic Jira export: {e}")
+                    jira_error = str(e)
+            else:
+                jira_error = "One or more Jira configuration fields were missing."
+
+        response_data = {
+            'extracted_text': extracted_text,
+            'test_cases': all_test_cases
+        }
+        if jira_confirmations:
+            response_data['jira_confirmations'] = jira_confirmations
+        if jira_error:
+            response_data['jira_error'] = jira_error
+
+        return jsonify(response_data)
+
 
     except Exception as e:
         print(f"Error during generation: {e}")
@@ -199,6 +241,7 @@ def handle_download():
     format = request.args.get('format', 'txt')
     data = request.get_json()
     test_cases = data.get('test_cases', [])
+
     if not test_cases: return jsonify({'error': 'No test cases to download'}), 400
     file_generators = {'csv': create_csv, 'xlsx': create_xlsx, 'pdf': create_pdf, 'txt': create_txt}
     generator = file_generators.get(format)
@@ -212,12 +255,20 @@ def handle_download():
 def handle_export_to_jira():
     data = request.get_json()
     try:
+        # Get Zephyr flag from manual export form
+        is_zephyr_api_integration = data.get('is_zephyr_api_integration', False)
+        zephyr_api_token = data.get('zephyr_api_token') # Get Zephyr API Token
+
+        print(f"--- DEBUG: Manual Jira Export Request ---\n  Is Zephyr API Integration: {is_zephyr_api_integration}\n  Zephyr API Token: {'*' * len(zephyr_api_token) if zephyr_api_token else 'N/A'}")
+
         confirmations = create_jira_issues(
             jira_server=data.get('server'),
             jira_email=data.get('email'),
             jira_token=data.get('token'),
             project_key=data.get('project_key'),
-            test_cases=data.get('test_cases')
+            test_cases=data.get('test_cases'),
+            is_zephyr_api_integration=is_zephyr_api_integration, # Pass the Zephyr API integration flag
+            zephyr_api_token=zephyr_api_token # Pass the Zephyr API Token
         )
         return jsonify({'confirmations': confirmations})
     except Exception as e: return jsonify({'error': str(e)}), 500

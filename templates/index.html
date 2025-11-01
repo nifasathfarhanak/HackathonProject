@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -21,15 +20,22 @@
                     <input type="file" id="file-input" name="requirement_file" accept=".pdf,.docx,.xml,.md,.txt" required>
                     
                     <div class="jira-grid">
-                        <input type="text" id="jira-server" name="jira_server" placeholder="Jira Server URL">
-                        <input type="email" id="jira-email" name="jira_email" placeholder="Jira Email">
-                        <input type="password" id="jira-token" name="jira_token" placeholder="Jira API Token">
-                        <input type="text" id="jira-project-key" name="jira_project_key" placeholder="Jira Project Key">
+                        <input type="text" id="jira-server" name="jira_server" placeholder="Jira Server URL" value="https://nifasathfarhanak.atlassian.net">
+                        <input type="email" id="jira-email" name="jira_email" placeholder="Jira Email" value="nifasathfarhanak@gmail.com">
+                        <input type="password" id="jira-token" name="jira_token" placeholder="Jira API Token" value="ATATT3xFfGF0Gq_PxMMJ5_78Ah3oAxIOv-k04sFOXyyzhoLpVqqaxlijh2Nb-ZPbCw9zmhdYvecp6JNMbMx_ue9-Cv-QPpPg502zLqXOJtYZfGlfxthsaTwTjxUo9XqUKKUgQWCqfgE6b3X3iwsAQF8st4gkYHoDO4d-uwXP5DG9CmtpHGbZW9Q=4A26B70C">
+                        <input type="text" id="jira-project-key" name="jira_project_key" placeholder="Jira Project Key" value="SCRUM">
+                        <input type="password" id="zephyr-api-token" name="zephyr_api_token" placeholder="Zephyr Scale API Token (JWT)" value="eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJjb250ZXh0Ijp7ImJhc2VVcmwiOiJodHRwczovL25pZmFzYXRoZmFyaGFuYWsuYXRsYXNzaWFuLm5ldCIsInVzZXIiOnsiYWNjb3VudElkIjoiNzEyMDIwOjI0MTMzM2EzLWNlODctNDNhZi1iOTIzLWYyZjA1MTRmM2QxZCIsInRva2VuSWQiOiI2MjFhOGQ3Ny1lYjZkLTRmNjYtOTUwMC01NTkxNDE1ZjhjYjkifX0sImlzcyI6ImNvbS5rYW5vYWgudGVzdC1tYW5hZ2VyIiwic3ViIjoiMjRjYmZiMzAtNDY5My0zZjZmLWEzMTAtNTZkOWI2NDM1MTdhIiwiZXhwIjoxNzkzNTUxNzIyLCJpYXQiOjE3NjIwMTU3MjJ9.ys7WKD4S3h2jZm-XxtvSe3pkfn5aI1TpCO3yq7AgO0Y">
                     </div>
                     <div>
                         <input type="checkbox" id="jira-auto-export" name="jira_auto_export">
                         <label for="jira-auto-export">Automatically create Jira issues on generate</label>
                     </div>
+
+                    <div class="zephyr-config">
+                        <input type="checkbox" id="jira-zephyr-api-integration" name="is_zephyr_api_integration">
+                        <label for="jira-zephyr-api-integration">Use Zephyr Scale API Integration</label>
+                    </div>
+
                     <div id="upload-jira-status"></div>
 
                     <button type="submit">Generate & Analyze Test Cases</button>
@@ -37,7 +43,6 @@
             </div>
 
             <div id="loading" class="hidden">
-                <div class="spinner"></div>
                 <p id="loading-message">Processing... This may take a few moments.</p>
             </div>
 
@@ -54,10 +59,10 @@
                 </div>
 
                 <div id="agent-builder-chat-container" class="chat-section">
-                    <h2>Chat with Document (Powered by Agent Builder)</h2>
+                    <h2>Edit Test Cases with AI</h2>
                     <div id="chat-history"></div>
                     <form id="chat-form">
-                        <input type="text" id="chat-input" placeholder="Ask a question about the document..." required>
+                        <input type="text" id="chat-input" placeholder="e.g., 'Change the priority of TC-001 to Low'" required>
                         <button type="submit">Send</button>
                     </form>
                 </div>
@@ -75,10 +80,18 @@
                     <h2>Export to Jira (Manual)</h2>
                     <form id="jira-form">
                         <div class="jira-grid">
-                            <input type="text" id="manual-jira-server" placeholder="Jira Server URL (e.g., https://your-domain.atlassian.net)">
-                            <input type="email" id="manual-jira-email" placeholder="Jira Email">
-                            <input type="password" id="manual-jira-token" placeholder="Jira API Token">
-                            <input type="text" id="manual-jira-project-key" placeholder="Jira Project Key (e.g., PROJ)">
+                            <input type="text" id="manual-jira-server" placeholder="Jira Server URL (e.g., https://your-domain.atlassian.net)" value="https://nifasathfarhanak.atlassian.net">
+                            <input type="email" id="manual-jira-email" placeholder="Jira Email" value="nifasathfarhanak@gmail.com">
+                            <input type="password" id="manual-jira-token" placeholder="Jira API Token" value="ATATT3xFfGF0Gq_PxMMJ5_78Ah3oAxIOv-k04sFOXyyzhoLpVqqaxlijh2Nb-ZPbCw9zmhdYvecp6JNMbMx_ue9-Cv-QPpPg502zLqXOJtYZfGlfxthsaTwTjxUo9XqUKKUgQWCqfgE6b3X3iwsAQF8st4gkYHoDO4d-uwXP5DG9CmtpHGbZW9Q=4A26B70C">
+                            <input type="text" id="manual-jira-project-key" placeholder="Jira Project Key (e.g., PROJ)" value="SCRUM">
+                            <input type="password" id="manual-zephyr-api-token" name="manual_zephyr_api_token" placeholder="Zephyr Scale API Token (JWT)" value="eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJjb250ZXh0Ijp7ImJhc2VVcmwiOiJodHRwczovL25pZmFzYXRoZmFyaGFuYS5hdGxhc3NpYW4ubmV0IiwidXNlciI6eyJhbGciOiJIUzI1NiJ9.eyJjb250ZXh0Ijp7ImJhc2VVcmwiOiJodHRwczovL25pZmFzYXRoZmFyaGFuYS5hdGxhc3NpYW4ubmV0IiwidXNlciI6eyJ
+hY2NvdW50SWQiOiI3MTIwMjA6MjQxMzMzYTMtY2U4Ny00M2FmLWI5MjMtZjJmMDUxNGY
+zZDFkIiwidG9rZW5JZCI6IjM0MjU0NmQyLTU5MzgtND
+E1ZC1iNDFmLTE0ODRhNTdjZmQ5MCJ9fSwiaXNzIjoiY29tLmthbm9haC50ZXN0LW1hbmFnZXIiLCJzdWIiOiIyNGNiZmIzMC00NjkzLTMzZjZmLWEzMTAtNTZkOWI2NDM1MTdhIiwiZXhwIjoxNzkzNTQ4MjgwLCJpYXQiOjE3NjIwMTIyODB9.UPShHuyE78t8dNMtGJqiaF9bxicWyErJlb0gSj8jj2E">
+                        </div>
+                        <div class="zephyr-config">
+                            <input type="checkbox" id="manual-jira-zephyr-api-integration" name="manual_is_zephyr_api_integration">
+                            <label for="manual-jira-zephyr-api-integration">Use Zephyr Scale API Integration</label>
                         </div>
                         <button type="submit">Create Jira Issues Manually</button>
                     </form>
@@ -99,13 +112,39 @@
 
         let generatedTestCases = [];
 
+        // Zephyr config elements for auto-export
+        const jiraZephyrApiIntegrationCheckbox = document.getElementById('jira-zephyr-api-integration');
+        const zephyrApiTokenInput = document.getElementById('zephyr-api-token');
+
+        // Zephyr config elements for manual export
+        const manualJiraZephyrApiIntegrationCheckbox = document.getElementById('manual-jira-zephyr-api-integration');
+        const manualZephyrApiTokenInput = document.getElementById('manual-zephyr-api-token');
+
+
         uploadForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+
             const fileInput = document.getElementById('file-input');
             if (!fileInput.files.length) { alert('Please select a file.'); return; }
 
             const formData = new FormData(uploadForm);
             const autoExport = document.getElementById('jira-auto-export').checked;
+            const isZephyrApiIntegration = jiraZephyrApiIntegrationCheckbox.checked;
+            const zephyrApiToken = zephyrApiTokenInput.value;
+
+            // Add Zephyr specific fields to formData if checked
+            if (isZephyrApiIntegration) {
+                formData.append('is_zephyr_api_integration', 'true');
+                if (!zephyrApiToken) {
+                    alert('Please provide the Zephyr Scale API Token for API integration.');
+                    loadingDiv.classList.add('hidden');
+                    return;
+                }
+                formData.append('zephyr_api_token', zephyrApiToken);
+            } else {
+                formData.append('is_zephyr_api_integration', 'false'); // Explicitly send false if not checked
+            }
+
 
             resultsDiv.classList.add('hidden');
             loadingDiv.classList.remove('hidden');
@@ -114,6 +153,9 @@
             let msg = 'Processing... The AI is generating and validating test cases.';
             if(autoExport) {
                 msg += ' Jira export will be attempted.';
+                if (isZephyrApiIntegration) {
+                    msg += ' (using Zephyr Scale API)';
+                }
             }
             loadingMessage.textContent = msg;
 
@@ -147,6 +189,7 @@
                 loadingDiv.classList.add('hidden');
             }
         });
+
 
         function formatRtm(rtm) {
             if (!rtm) return 'N/A';
@@ -199,6 +242,7 @@
             testCaseContainer.innerHTML = '';
             testCaseContainer.appendChild(table);
         }
+
         
         const jiraForm = document.getElementById('jira-form');
         const jiraStatusDiv = document.getElementById('jira-status');
@@ -207,40 +251,43 @@
         const chatInput = document.getElementById('chat-input');
         const chatHistory = document.getElementById('chat-history');
 
-        function appendMessage(text, sender, citations = []) {
+        function appendMessage(text, sender) {
             const messageDiv = document.createElement('div');
             messageDiv.classList.add('chat-message', sender);
-            messageDiv.innerHTML = text;
-
-            if (citations.length > 0) {
-                const citationsDiv = document.createElement('div');
-                citationsDiv.classList.add('citations');
-                let citationsHtml = '<strong>Sources:</strong><ul>';
-                citations.forEach(cit => {
-                    citationsHtml += `<li>${cit.content.substring(0, 100)}...</li>`;
-                });
-                citationsHtml += '</ul>';
-                citationsDiv.innerHTML = citationsHtml;
-                messageDiv.appendChild(citationsDiv);
-            }
-
+            messageDiv.textContent = text;
             chatHistory.appendChild(messageDiv);
             chatHistory.scrollTop = chatHistory.scrollHeight;
         }
 
         chatForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const userQuestion = chatInput.value;
-            if (!userQuestion.trim()) return;
-            appendMessage(userQuestion, 'user');
+            const userPrompt = chatInput.value;
+            if (!userPrompt.trim() || generatedTestCases.length === 0) {
+                alert("Please generate test cases before trying to edit them.");
+                return;
+            }
+            
+            appendMessage(userPrompt, 'user');
             chatInput.value = '';
-            appendMessage('...', 'bot-loading');
+            appendMessage('Editing test cases with AI... ', 'bot-loading');
+
             try {
-                const response = await fetch('/agent_builder_chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: userQuestion }) });
+                const response = await fetch('/edit_test_cases', { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify({ prompt: userPrompt, test_cases: generatedTestCases })
+                });
                 const data = await response.json();
                 document.querySelector('.bot-loading').remove();
-                if (!response.ok) { throw new Error(data.error || 'An unknown error occurred.'); }
-                appendMessage(data.answer, 'bot', data.citations);
+
+                if (!response.ok) { 
+                    throw new Error(data.error || 'An unknown error occurred.'); 
+                }
+
+                appendMessage('Test cases updated successfully!', 'bot');
+                generatedTestCases = data.test_cases;
+                renderTestCases(generatedTestCases);
+
             } catch (error) {
                 document.querySelector('.bot-loading').remove();
                 appendMessage(`Error: ${error.message}`, 'bot-error');
@@ -275,18 +322,30 @@
 
         jiraForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+            const isZephyrApiIntegrationManual = manualJiraZephyrApiIntegrationCheckbox.checked;
+            const zephyrApiTokenManual = manualZephyrApiTokenInput.value;
+
             const jiraConfig = { 
                 server: document.getElementById('manual-jira-server').value, 
                 email: document.getElementById('manual-jira-email').value, 
                 token: document.getElementById('manual-jira-token').value, 
                 project_key: document.getElementById('manual-jira-project-key').value, 
-                test_cases: generatedTestCases 
+                test_cases: generatedTestCases,
+                is_zephyr_api_integration: isZephyrApiIntegrationManual,
+                zephyr_api_token: zephyrApiTokenManual
             };
             if (!jiraConfig.server || !jiraConfig.email || !jiraConfig.token || !jiraConfig.project_key) { alert('Please fill in all Jira configuration details for manual export.'); return; }
+            
+            if (isZephyrApiIntegrationManual && !zephyrApiTokenManual) {
+                alert('Please provide the Zephyr Scale API Token for API integration.');
+                return;
+            }
+
             jiraStatusDiv.innerHTML = '<p>Creating issues in Jira...</p>';
             try {
                 const response = await fetch('/export_to_jira', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(jiraConfig) });
                 const data = await response.json();
+                
                 if (!response.ok) { throw new Error(data.error || 'An unknown error occurred.'); }
                 let confirmationsHtml = '<h3>Jira Export Status</h3>';
                 data.confirmations.forEach(msg => { confirmationsHtml += `<p class="jira-confirmation">${msg}</p>`; });
