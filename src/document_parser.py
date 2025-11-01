@@ -5,7 +5,7 @@ from docx import Document
 import xml.etree.ElementTree as ET
 import markdown
 
-MAX_CHUNK_SIZE = 4000 # Define a max size for text chunks
+MAX_CHUNK_SIZE = 12000 # Define a max size for text chunks
 
 def smart_chunk_text(text):
     """Splits text into chunks of a maximum size, respecting sentence boundaries."""
@@ -41,6 +41,7 @@ def parse_docx(file_content):
     try:
         from io import BytesIO
         doc_file = BytesIO(file_content)
+        doc = Document(doc_file)
         text = "\n".join([para.text for para in doc.paragraphs])
         return smart_chunk_text(text)
     except Exception as e:

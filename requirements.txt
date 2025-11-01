@@ -10,3 +10,4 @@ jira
 openpyxl
 fpdf2
 waitress
+firebase-admin
