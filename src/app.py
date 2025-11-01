@@ -16,7 +16,7 @@ load_dotenv()
 # Corrected: Use absolute imports as 'src' is on the path
 from document_parser import parse_document
 # Corrected: Import the new simplified function
-from test_generator import generate_test_cases_from_chunk
+from test_generator import generate_test_cases_from_chunk, edit_test_cases_with_ai
 from alm_integrator import create_jira_issues
 from quality_guardian import run_quality_checks
 
@@ -211,6 +211,22 @@ def handle_generate_and_analyze():
 
     except Exception as e:
         print(f"Error during generation: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/edit_test_cases', methods=['POST'])
+def handle_edit_test_cases():
+    data = request.get_json()
+    user_prompt = data.get('prompt')
+    test_cases = data.get('test_cases')
+
+    if not user_prompt or not test_cases:
+        return jsonify({'error': 'A prompt and a list of test cases are required.'}), 400
+
+    try:
+        updated_test_cases = edit_test_cases_with_ai(user_prompt, test_cases)
+        return jsonify({'test_cases': updated_test_cases})
+    except Exception as e:
+        print(f"Error during test case editing: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/download', methods=['POST'])
