@@ -54,10 +54,10 @@
                 </div>
 
                 <div id="agent-builder-chat-container" class="chat-section">
-                    <h2>Edit Test Cases with AI</h2>
+                    <h2>Chat with Document (Powered by Agent Builder)</h2>
                     <div id="chat-history"></div>
                     <form id="chat-form">
-                        <input type="text" id="chat-input" placeholder="e.g., 'Change the priority of TC-001 to Low'" required>
+                        <input type="text" id="chat-input" placeholder="Ask a question about the document..." required>
                         <button type="submit">Send</button>
                     </form>
                 </div>
@@ -207,43 +207,40 @@
         const chatInput = document.getElementById('chat-input');
         const chatHistory = document.getElementById('chat-history');
 
-        function appendMessage(text, sender) {
+        function appendMessage(text, sender, citations = []) {
             const messageDiv = document.createElement('div');
             messageDiv.classList.add('chat-message', sender);
-            messageDiv.textContent = text;
+            messageDiv.innerHTML = text;
+
+            if (citations.length > 0) {
+                const citationsDiv = document.createElement('div');
+                citationsDiv.classList.add('citations');
+                let citationsHtml = '<strong>Sources:</strong><ul>';
+                citations.forEach(cit => {
+                    citationsHtml += `<li>${cit.content.substring(0, 100)}...</li>`;
+                });
+                citationsHtml += '</ul>';
+                citationsDiv.innerHTML = citationsHtml;
+                messageDiv.appendChild(citationsDiv);
+            }
+
             chatHistory.appendChild(messageDiv);
             chatHistory.scrollTop = chatHistory.scrollHeight;
         }
 
         chatForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const userPrompt = chatInput.value;
-            if (!userPrompt.trim() || generatedTestCases.length === 0) {
-                alert("Please generate test cases before trying to edit them.");
-                return;
-            }
-            
-            appendMessage(userPrompt, 'user');
+            const userQuestion = chatInput.value;
+            if (!userQuestion.trim()) return;
+            appendMessage(userQuestion, 'user');
             chatInput.value = '';
-            appendMessage('Editing test cases with AI... ', 'bot-loading');
-
+            appendMessage('...', 'bot-loading');
             try {
-                const response = await fetch('/edit_test_cases', { 
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' }, 
-                    body: JSON.stringify({ prompt: userPrompt, test_cases: generatedTestCases })
-                });
+                const response = await fetch('/agent_builder_chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: userQuestion }) });
                 const data = await response.json();
                 document.querySelector('.bot-loading').remove();
-
-                if (!response.ok) { 
-                    throw new Error(data.error || 'An unknown error occurred.'); 
-                }
-
-                appendMessage('Test cases updated successfully!', 'bot');
-                generatedTestCases = data.test_cases;
-                renderTestCases(generatedTestCases);
-
+                if (!response.ok) { throw new Error(data.error || 'An unknown error occurred.'); }
+                appendMessage(data.answer, 'bot', data.citations);
             } catch (error) {
                 document.querySelector('.bot-loading').remove();
                 appendMessage(`Error: ${error.message}`, 'bot-error');

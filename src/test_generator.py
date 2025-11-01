@@ -4,7 +4,6 @@ import json
 import re
 import time
 
-# Using the consumer-grade Google AI SDK as it is more reliable for your project
 import google.generativeai as genai
 
 # --- Client Initialization ---
@@ -14,18 +13,19 @@ try:
     if not gemini_api_key:
         raise ValueError("GEMINI_API_KEY not found in .env file.")
     genai.configure(api_key=gemini_api_key)
-    gemini_model = genai.GenerativeModel('gemini-pro-latest')
+    gemini_model = genai.GenerativeModel('gemini-2.0-flash')
     print("--- Google AI (API Key) initialized successfully. ---")
 except Exception as e:
     print(f"FATAL ERROR initializing Google AI: {e}")
 
 def parse_ai_response_to_dicts(text: str) -> list:
-    """Parses a structured text response from the AI into a list of dictionaries."""
+    """Parses the AI's custom text format into a list of test case dictionaries."""
     test_cases = []
-    # Regex to find entire test case blocks
-    test_case_blocks = re.findall(r"===TEST CASE START===\n(.*?)\n===TEST CASE END===", text, re.DOTALL)
+    # Split the entire response into blocks for each test case
+    for block in text.split("===TEST CASE START==="):
+        if "===TEST CASE END===" not in block:
+            continue
 
-    for block in test_case_blocks:
         test_case = {}
         # Use regex to find each field, making it robust to missing fields
         id_match = re.search(r"ID: (.*?)\n", block)
@@ -43,7 +43,6 @@ def parse_ai_response_to_dicts(text: str) -> list:
         priority_match = re.search(r"PRIORITY: (.*?)\n", block)
         if priority_match: test_case['priority'] = priority_match.group(1).strip()
 
-        # Find all steps
         steps = re.findall(r"STEP: (.*?)\n", block)
         test_case['steps'] = [s.strip() for s in steps]
 
@@ -52,75 +51,105 @@ def parse_ai_response_to_dicts(text: str) -> list:
 
         rtm_match = re.search(r"RTM: (.*?)\n", block)
         if rtm_match: test_case['rtm_compliance_mapping'] = rtm_match.group(1).strip()
-        
+
         confidence_match = re.search(r"CONFIDENCE: (.*?)\n", block)
         if confidence_match: test_case['confidence_score'] = confidence_match.group(1).strip()
 
-        # Only add the test case if it has a description
         if test_case.get('description'):
             test_cases.append(test_case)
             
     return test_cases
 
 def generate_test_cases_from_chunk(text_chunk: str) -> list:
-    """Generates a list of test case dicts from a chunk of a requirement document."""
+    """Generates test cases using a simple, reliable text-based prompt."""
     if not gemini_model:
         raise ConnectionError("Google AI model not initialized.")
 
-    # New prompt asking for a simple, structured text format instead of JSON
-    prompt = f"""Your task is to act as a senior QA engineer. Read the following chunk of a software requirement document. Identify any and all specific, actionable requirements within this text. For each requirement you find, generate a detailed set of test cases in the specified format.
+    prompt = f"""Your task is to act as a senior QA engineer. Read the following chunk of a software requirement document. For each actionable requirement you find, generate one or more detailed test cases using the exact format below.
 
     **Document Chunk:**
     {text_chunk}
 
-    **Output Format Instructions:**
-    - For each test case, you MUST start with the line `===TEST CASE START===`.
-    - Each field must be on its own line, starting with the field name, a colon, and a space.
-    - The fields are: `ID`, `REQ`, `DESC`, `TYPE`, `PRIORITY`, `STEP` (use one line for each step), `EXPECTED`, `RTM`, `CONFIDENCE`.
-    - For the 'TYPE' field, you should generate a variety of test cases for each requirement, including (where applicable): Functional, Regression, Positive, Negative, Boundary, Edge, and Security.
-    - You MUST provide a value for the `RTM` field. If no specific traceability information is available, you MUST write `RTM: N/A`.
-    - A `CONFIDENCE` score (e.g., `CONFIDENCE: 95%`) indicating how accurately the test case reflects the source requirement.
-    - You MUST end each test case with the line `===TEST CASE END===`.
-    - If you find no actionable requirements in this chunk, return an empty response.
+    **FORMAT:**
+    ===TEST CASE START===
+    ID: [A unique test case ID]
+    REQ: [The requirement ID]
+    DESC: [A clear, one-sentence description of the test objective]
+    TYPE: [e.g., Positive, Negative, Functional, Boundary, Security, Regression]
+    PRIORITY: [High, Medium, or Low]
+    STEP: [First step]
+    STEP: [Second step]
+    STEP: [Third step...]
+    EXPECTED: [The expected result]
+    RTM: [Traceability info, or N/A if not found]
+    CONFIDENCE: [Your confidence percentage, e.g., 95%]
+    ===TEST CASE END===
 
-    **Example of a perfect, complete response:**
-    ===TEST CASE START===
-    ID: TC-001
-    REQ: REQ-4.2.1
-    DESC: Verify that the user can log in with valid credentials.
-    TYPE: Positive
-    PRIORITY: High
-    STEP: Navigate to the login page.
-    STEP: Enter a valid username and password.
-    STEP: Click the login button.
-    EXPECTED: The user is successfully logged in and redirected to the dashboard.
-    RTM: IEC 62304 - 5.2.2
-    CONFIDENCE: 98%
-    ===TEST CASE END===
-    ===TEST CASE START===
-    ID: TC-002
-    REQ: REQ-4.2.1
-    DESC: Verify that the user cannot log in with invalid credentials.
-    TYPE: Negative
-    PRIORITY: High
-    STEP: Navigate to the login page.
-    STEP: Enter an invalid username and password.
-    STEP: Click the login button.
-    EXPECTED: An error message is displayed to the user.
-    RTM: N/A
-    CONFIDENCE: 95%
-    ===TEST CASE END===
+    **INSTRUCTIONS:**
+    - You MUST follow the format precisely.
+    - You MUST generate a value for the `CONFIDENCE` field for every test case.
+    - You MUST generate a value for the `RTM` field for every test case.
+    - If no requirements are found, return an empty response.
     """
 
     try:
         response = gemini_model.generate_content(prompt)
-        # Use the new, ultra-robust text parser
+        # Use the reliable text parser
         parsed_test_cases = parse_ai_response_to_dicts(response.text)
         if parsed_test_cases:
             return parsed_test_cases
         else:
             print(f"    -> No test cases could be parsed from the AI's response for this chunk.")
+            return []
     except Exception as e:
         print(f"    -> An unexpected error occurred during generation: {e}")
+        return []
 
-    return [] # Return an empty list if anything goes wrong
+def edit_test_cases_with_ai(user_prompt: str, test_cases: list) -> list:
+    """Uses the AI to edit a list of test cases using the same text-based format."""
+    if not gemini_model:
+        raise ConnectionError("Google AI model not initialized.")
+
+    # Convert the current test cases into the text format for the AI
+    test_cases_text = ""
+    for tc in test_cases:
+        test_cases_text += "===TEST CASE START===\n"
+        test_cases_text += f"ID: {tc.get('test_case_id', 'N/A')}\n"
+        test_cases_text += f"REQ: {tc.get('requirement_id', 'N/A')}\n"
+        test_cases_text += f"DESC: {tc.get('description', 'N/A')}\n"
+        test_cases_text += f"TYPE: {tc.get('test_type', 'N/A')}\n"
+        test_cases_text += f"PRIORITY: {tc.get('priority', 'N/A')}\n"
+        for step in tc.get('steps', []):
+            test_cases_text += f"STEP: {step}\n"
+        test_cases_text += f"EXPECTED: {tc.get('expected_result', 'N/A')}\n"
+        test_cases_text += f"RTM: {tc.get('rtm_compliance_mapping', 'N/A')}\n"
+        test_cases_text += f"CONFIDENCE: {tc.get('confidence_score', 'N/A')}\n"
+        test_cases_text += "===TEST CASE END===\n"
+
+    prompt = f"""Your task is to act as an intelligent test case editor. You will be given a user's instruction and a list of test cases in a specific text format. Your goal is to apply the user's instruction to the test cases and return the *entire, complete, and updated* list of test cases in the exact same text format.
+
+    **User's Instruction:**
+    {user_prompt}
+
+    **Current Test Cases:**
+    {test_cases_text}
+
+    **Output Format Instructions:**
+    - You MUST return the test cases in the same `===TEST CASE START===`...`===TEST CASE END===` format.
+    - Do NOT return any text, explanations, or formatting outside of this format.
+    - The returned text must contain all test cases, including those that were not changed.
+    - If the user's instruction is unclear or cannot be applied, return the original, unchanged text that you were given.
+    """
+
+    try:
+        response = gemini_model.generate_content(prompt)
+        # Re-use the reliable text parser
+        updated_test_cases = parse_ai_response_to_dicts(response.text)
+        if updated_test_cases:
+            return updated_test_cases
+        else:
+            print("    -> AI editor failed to return valid text format. Reverting changes.")
+            return test_cases
+    except Exception as e:
+        print(f"    -> An error occurred during AI editing: {e}")
+        return test_cases
