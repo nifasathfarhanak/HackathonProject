@@ -14,7 +14,7 @@ try:
     if not gemini_api_key:
         raise ValueError("GEMINI_API_KEY not found in .env file.")
     genai.configure(api_key=gemini_api_key)
-    gemini_model = genai.GenerativeModel('gemini-1.5-pro-latest')
+    gemini_model = genai.GenerativeModel('gemini-pro-latest')
     print("--- Google AI (API Key) initialized successfully. ---")
 except Exception as e:
     print(f"FATAL ERROR initializing Google AI: {e}")
@@ -22,11 +22,10 @@ except Exception as e:
 def parse_ai_response_to_dicts(text: str) -> list:
     """Parses a structured text response from the AI into a list of dictionaries."""
     test_cases = []
-    # Split the entire response into blocks for each test case
-    for block in text.split("===TEST CASE START==="):
-        if "===TEST CASE END===" not in block:
-            continue
+    # Regex to find entire test case blocks
+    test_case_blocks = re.findall(r"===TEST CASE START===\n(.*?)\n===TEST CASE END===", text, re.DOTALL)
 
+    for block in test_case_blocks:
         test_case = {}
         # Use regex to find each field, making it robust to missing fields
         id_match = re.search(r"ID: (.*?)\n", block)
@@ -53,6 +52,9 @@ def parse_ai_response_to_dicts(text: str) -> list:
 
         rtm_match = re.search(r"RTM: (.*?)\n", block)
         if rtm_match: test_case['rtm_compliance_mapping'] = rtm_match.group(1).strip()
+        
+        confidence_match = re.search(r"CONFIDENCE: (.*?)\n", block)
+        if confidence_match: test_case['confidence_score'] = confidence_match.group(1).strip()
 
         # Only add the test case if it has a description
         if test_case.get('description'):
@@ -74,7 +76,10 @@ def generate_test_cases_from_chunk(text_chunk: str) -> list:
     **Output Format Instructions:**
     - For each test case, you MUST start with the line `===TEST CASE START===`.
     - Each field must be on its own line, starting with the field name, a colon, and a space.
-    - The fields are: `ID`, `REQ`, `DESC`, `TYPE`, `PRIORITY`, `STEP` (use one line for each step), `EXPECTED`, `RTM`.
+    - The fields are: `ID`, `REQ`, `DESC`, `TYPE`, `PRIORITY`, `STEP` (use one line for each step), `EXPECTED`, `RTM`, `CONFIDENCE`.
+    - For the 'TYPE' field, you should generate a variety of test cases for each requirement, including (where applicable): Functional, Regression, Positive, Negative, Boundary, Edge, and Security.
+    - You MUST provide a value for the `RTM` field. If no specific traceability information is available, you MUST write `RTM: N/A`.
+    - A `CONFIDENCE` score (e.g., `CONFIDENCE: 95%`) indicating how accurately the test case reflects the source requirement.
     - You MUST end each test case with the line `===TEST CASE END===`.
     - If you find no actionable requirements in this chunk, return an empty response.
 
@@ -83,25 +88,27 @@ def generate_test_cases_from_chunk(text_chunk: str) -> list:
     ID: TC-001
     REQ: REQ-4.2.1
     DESC: Verify that the user can log in with valid credentials.
-    TYPE: Functional
+    TYPE: Positive
     PRIORITY: High
     STEP: Navigate to the login page.
     STEP: Enter a valid username and password.
     STEP: Click the login button.
     EXPECTED: The user is successfully logged in and redirected to the dashboard.
     RTM: IEC 62304 - 5.2.2
+    CONFIDENCE: 98%
     ===TEST CASE END===
     ===TEST CASE START===
     ID: TC-002
     REQ: REQ-4.2.1
     DESC: Verify that the user cannot log in with invalid credentials.
-    TYPE: Functional
+    TYPE: Negative
     PRIORITY: High
     STEP: Navigate to the login page.
     STEP: Enter an invalid username and password.
     STEP: Click the login button.
     EXPECTED: An error message is displayed to the user.
-    RTM: IEC 62304 - 5.2.2
+    RTM: N/A
+    CONFIDENCE: 95%
     ===TEST CASE END===
     """
 

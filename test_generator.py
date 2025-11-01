@@ -14,7 +14,7 @@ try:
     if not gemini_api_key:
         raise ValueError("GEMINI_API_KEY not found in .env file.")
     genai.configure(api_key=gemini_api_key)
-    gemini_model = genai.GenerativeModel('gemini-1.5-pro-latest')
+    gemini_model = genai.GenerativeModel('gemini-pro-latest')
     print("--- Google AI (API Key) initialized successfully. ---")
 except Exception as e:
     print(f"FATAL ERROR initializing Google AI: {e}")

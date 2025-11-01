@@ -75,7 +75,7 @@ def create_pdf(test_cases, headers):
     pdf = FPDF(orientation='L')
     pdf.add_page()
     pdf.set_font("Arial", size=8)
-    col_widths = [20, 25, 50, 20, 20, 50, 50, 50] # Adjusted widths
+    col_widths = [20, 25, 50, 20, 20, 50, 50, 50, 20] # Adjusted widths
     for i, header in enumerate(headers):
         pdf.cell(col_widths[i], 10, header.replace('_', ' ').title(), 1)
     pdf.ln()
@@ -106,7 +106,7 @@ def create_pdf(test_cases, headers):
                 pdf.set_x(pdf.get_x() + col_widths[i])
         pdf.ln(max_height)
 
-    output = io.BytesIO(pdf.output(dest='S').encode('latin-1'))
+    output = io.BytesIO(pdf.output())
     return output
 
 def create_txt(test_cases, headers):
@@ -171,7 +171,43 @@ def handle_generate_and_analyze():
             return jsonify({'error': 'The AI did not generate any valid test cases.'}), 500
 
         print("--- All processing complete. ---")
-        return jsonify({'extracted_text': extracted_text, 'test_cases': all_test_cases})
+        
+        # --- Automatic Jira Export ---
+        jira_confirmations = None
+        jira_error = None
+        if request.form.get('jira_auto_export'):
+            jira_server = request.form.get('jira_server')
+            jira_email = request.form.get('jira_email')
+            jira_token = request.form.get('jira_token')
+            jira_project_key = request.form.get('jira_project_key')
+
+            if jira_server and jira_email and jira_token and jira_project_key:
+                try:
+                    print("--- Attempting automatic Jira export... ---")
+                    jira_confirmations = create_jira_issues(
+                        jira_server=jira_server,
+                        jira_email=jira_email,
+                        jira_token=jira_token,
+                        project_key=jira_project_key,
+                        test_cases=all_test_cases
+                    )
+                except Exception as e:
+                    print(f"Error during automatic Jira export: {e}")
+                    jira_error = str(e)
+            else:
+                jira_error = "One or more Jira configuration fields were missing."
+
+        response_data = {
+            'extracted_text': extracted_text,
+            'test_cases': all_test_cases
+        }
+        if jira_confirmations:
+            response_data['jira_confirmations'] = jira_confirmations
+        if jira_error:
+            response_data['jira_error'] = jira_error
+
+        return jsonify(response_data)
+
 
     except Exception as e:
         print(f"Error during generation: {e}")
@@ -179,7 +215,7 @@ def handle_generate_and_analyze():
 
 @app.route('/download', methods=['POST'])
 def handle_download():
-    HEADERS = ['test_case_id', 'requirement_id', 'description', 'test_type', 'priority', 'rtm_compliance_mapping', 'steps', 'expected_result']
+    HEADERS = ['test_case_id', 'requirement_id', 'description', 'test_type', 'priority', 'rtm_compliance_mapping', 'steps', 'expected_result', 'confidence_score']
     format = request.args.get('format', 'txt')
     data = request.get_json()
     test_cases = data.get('test_cases', [])

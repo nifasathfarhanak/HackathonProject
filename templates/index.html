@@ -16,17 +16,29 @@
 
         <div class="main-content">
             <div class="upload-section">
-                <h2>1. Upload Document</h2>
+                <h2>1. Upload Document & Configure</h2>
                 <form id="upload-form" enctype="multipart/form-data">
                     <input type="file" id="file-input" name="requirement_file" accept=".pdf,.docx,.xml,.md,.txt" required>
+                    
+                    <div class="jira-grid">
+                        <input type="text" id="jira-server" name="jira_server" placeholder="Jira Server URL">
+                        <input type="email" id="jira-email" name="jira_email" placeholder="Jira Email">
+                        <input type="password" id="jira-token" name="jira_token" placeholder="Jira API Token">
+                        <input type="text" id="jira-project-key" name="jira_project_key" placeholder="Jira Project Key">
+                    </div>
+                    <div>
+                        <input type="checkbox" id="jira-auto-export" name="jira_auto_export">
+                        <label for="jira-auto-export">Automatically create Jira issues on generate</label>
+                    </div>
+                    <div id="upload-jira-status"></div>
+
                     <button type="submit">Generate & Analyze Test Cases</button>
                 </form>
             </div>
 
             <div id="loading" class="hidden">
                 <div class="spinner"></div>
-                <!-- Simplified loading message -->
-                <p id="loading-message">Processing... This may take a few moments as the AI generates and validates the test cases.</p>
+                <p id="loading-message">Processing... This may take a few moments.</p>
             </div>
 
             <div id="results" class="hidden">
@@ -55,21 +67,20 @@
                     <div id="download-buttons">
                         <button class="download-btn" data-format="csv">Download as CSV</button>
                         <button class="download-btn" data-format="xlsx">Download as XLSX</button>
-                        <button class="download-btn" data-format="pdf">Download as PDF</button>
                         <button class="download-btn" data-format="txt">Download as TXT</button>
                     </div>
                 </div>
                 
                 <div class="jira-section">
-                    <h2>Export to Jira (Optional)</h2>
+                    <h2>Export to Jira (Manual)</h2>
                     <form id="jira-form">
                         <div class="jira-grid">
-                            <input type="text" id="jira-server" placeholder="Jira Server URL (e.g., https://your-domain.atlassian.net)">
-                            <input type="email" id="jira-email" placeholder="Jira Email">
-                            <input type="password" id="jira-token" placeholder="Jira API Token">
-                            <input type="text" id="jira-project-key" placeholder="Jira Project Key (e.g., PROJ)">
+                            <input type="text" id="manual-jira-server" placeholder="Jira Server URL (e.g., https://your-domain.atlassian.net)">
+                            <input type="email" id="manual-jira-email" placeholder="Jira Email">
+                            <input type="password" id="manual-jira-token" placeholder="Jira API Token">
+                            <input type="text" id="manual-jira-project-key" placeholder="Jira Project Key (e.g., PROJ)">
                         </div>
-                        <button type="submit">Create Jira Issues</button>
+                        <button type="submit">Create Jira Issues Manually</button>
                     </form>
                     <div id="jira-status"></div>
                 </div>
@@ -84,6 +95,7 @@
         const resultsDiv = document.getElementById('results');
         const extractedTextEl = document.getElementById('extracted-text');
         const testCaseContainer = document.getElementById('test-case-table-container');
+        const uploadJiraStatusDiv = document.getElementById('upload-jira-status');
 
         let generatedTestCases = [];
 
@@ -93,13 +105,20 @@
             if (!fileInput.files.length) { alert('Please select a file.'); return; }
 
             const formData = new FormData(uploadForm);
+            const autoExport = document.getElementById('jira-auto-export').checked;
 
             resultsDiv.classList.add('hidden');
             loadingDiv.classList.remove('hidden');
-            loadingMessage.textContent = 'Processing... This may take a few moments as the AI generates and validates the test cases.';
+            uploadJiraStatusDiv.innerHTML = '';
+            
+            let msg = 'Processing... The AI is generating and validating test cases.';
+            if(autoExport) {
+                msg += ' Jira export will be attempted.';
+            }
+            loadingMessage.textContent = msg;
+
 
             try {
-                // Make a single call to the new, efficient backend endpoint
                 const response = await fetch('/generate_and_analyze', { method: 'POST', body: formData });
                 const data = await response.json();
 
@@ -112,6 +131,16 @@
                 renderTestCases(generatedTestCases);
                 resultsDiv.classList.remove('hidden');
 
+                if (data.jira_confirmations) {
+                    let confirmationsHtml = '<h3>Jira Auto-Export Status</h3>';
+                    data.jira_confirmations.forEach(msg => { confirmationsHtml += `<p class="jira-confirmation">${msg}</p>`; });
+                    uploadJiraStatusDiv.innerHTML = confirmationsHtml;
+                }
+                 if (data.jira_error) {
+                    uploadJiraStatusDiv.innerHTML = `<p class="error">Jira Auto-Export Error: ${data.jira_error}</p>`;
+                }
+
+
             } catch (error) {
                 alert(`Error: ${error.message}`);
             } finally {
@@ -119,7 +148,6 @@
             }
         });
 
-        // ... (The rest of the JavaScript functions remain the same) ...
         function formatRtm(rtm) {
             if (!rtm) return 'N/A';
             if (typeof rtm === 'string') return rtm;
@@ -143,6 +171,7 @@
                         <th>RTM Compliance Mapping</th>
                         <th>Steps</th>
                         <th>Expected Result</th>
+                        <th>Confidence</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -162,13 +191,15 @@
                             <td>${formatRtm(tc.rtm_compliance_mapping)}</td>
                             <td><ol>${(tc.steps || []).map(step => `<li>${step}</li>`).join('')}</ol></td>
                             <td>${tc.expected_result || 'N/A'}</td>
+                            <td>${tc.confidence_score || 'N/A'}</td>
                         </tr>
                     `}).join('')}
                 </tbody>
             `;
-            document.getElementById('test-case-table-container').innerHTML = '';
-            document.getElementById('test-case-table-container').appendChild(table);
+            testCaseContainer.innerHTML = '';
+            testCaseContainer.appendChild(table);
         }
+        
         const jiraForm = document.getElementById('jira-form');
         const jiraStatusDiv = document.getElementById('jira-status');
         const downloadButtonsDiv = document.getElementById('download-buttons');
@@ -244,8 +275,14 @@
 
         jiraForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const jiraConfig = { server: document.getElementById('jira-server').value, email: document.getElementById('jira-email').value, token: document.getElementById('jira-token').value, project_key: document.getElementById('jira-project-key').value, test_cases: generatedTestCases };
-            if (!jiraConfig.server || !jiraConfig.email || !jiraConfig.token || !jiraConfig.project_key) { alert('Please fill in all Jira configuration details.'); return; }
+            const jiraConfig = { 
+                server: document.getElementById('manual-jira-server').value, 
+                email: document.getElementById('manual-jira-email').value, 
+                token: document.getElementById('manual-jira-token').value, 
+                project_key: document.getElementById('manual-jira-project-key').value, 
+                test_cases: generatedTestCases 
+            };
+            if (!jiraConfig.server || !jiraConfig.email || !jiraConfig.token || !jiraConfig.project_key) { alert('Please fill in all Jira configuration details for manual export.'); return; }
             jiraStatusDiv.innerHTML = '<p>Creating issues in Jira...</p>';
             try {
                 const response = await fetch('/export_to_jira', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(jiraConfig) });
