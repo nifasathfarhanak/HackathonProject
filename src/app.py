@@ -5,10 +5,14 @@ import re
 import io
 import csv
 import concurrent.futures
+import time # Added for retry mechanism
 from flask import Flask, request, jsonify, render_template, send_file, session
 from dotenv import load_dotenv
 from openpyxl import Workbook
 from fpdf import FPDF
+
+import firebase_admin
+from firebase_admin import credentials, firestore
 
 # Load environment variables from .env file
 load_dotenv()
@@ -18,11 +22,38 @@ from document_parser import parse_document
 # Corrected: Import the new simplified function
 from test_generator import generate_test_cases_from_chunk, edit_test_cases_with_ai
 from alm_integrator import create_jira_issues # Keep this import
-# from quality_guardian import run_quality_checks # Temporarily disable quality checks
+from quality_guardian import run_quality_checks # Re-enable quality checks
 
 # Initialize the Flask application
 app = Flask(__name__, template_folder='../templates', static_folder='../static')
 app.secret_key = os.urandom(24)
+
+# Initialize Firebase
+try:
+    firebase_credentials_path = os.getenv('FIREBASE_CREDENTIALS')
+    print(f"DEBUG: FIREBASE_CREDENTIALS path from .env: {firebase_credentials_path}")
+    
+    # Fallback to local serviceAccountKey.json if env var not set or path invalid
+    if not firebase_credentials_path or not os.path.exists(firebase_credentials_path):
+        print("DEBUG: FIREBASE_CREDENTIALS env var not set or path invalid. Checking for config/serviceAccountKey.json...")
+        local_credentials_path = os.path.join(os.path.dirname(__file__), '..', 'config', 'serviceAccountKey.json')
+        if os.path.exists(local_credentials_path):
+            firebase_credentials_path = local_credentials_path
+            print(f"DEBUG: Using local serviceAccountKey.json at: {firebase_credentials_path}")
+        else:
+            print("DEBUG: config/serviceAccountKey.json not found either.")
+
+    if firebase_credentials_path and os.path.exists(firebase_credentials_path):
+        cred = credentials.Certificate(firebase_credentials_path)
+        firebase_admin.initialize_app(cred)
+        db = firestore.client()
+        print("Firebase initialized successfully.")
+    else:
+        print("Firebase credentials not found or path is incorrect. Firebase will not be used.")
+        db = None
+except Exception as e:
+    print(f"Error initializing Firebase: {e}")
+    db = None
 
 document_cache = {}
 
@@ -127,11 +158,43 @@ def create_txt(test_cases, headers):
 # New helper function for the fully parallel pipeline
 def generate_and_check(chunk):
     """A single task that generates test cases from a chunk and runs quality checks."""
-    test_cases = generate_test_cases_from_chunk(chunk)
-    if not test_cases:
-        return [] # Return empty list if generation fails
-    # checked_test_cases = run_quality_checks(test_cases) # Temporarily disable quality checks
-    return test_cases # Return raw test cases without quality checks
+    retries = 3
+    delay = 2 # seconds
+    for i in range(retries):
+        try:
+            test_cases = generate_test_cases_from_chunk(chunk)
+            if not test_cases:
+                return [] # Return empty list if generation fails
+            checked_test_cases = run_quality_checks(test_cases) # Re-enable quality checks
+            return checked_test_cases
+        except Exception as e:
+            print(f"Attempt {i+1}/{retries} failed for chunk. Error: {e}")
+            if i < retries - 1:
+                time.sleep(delay)
+                delay *= 2 # Exponential backoff
+            else:
+                print(f"All {retries} attempts failed for chunk. Skipping this chunk.")
+                return [] # Return empty if all retries fail
+
+def save_test_cases_to_firebase(user_id, test_cases):
+    print(f"DEBUG: Entering save_test_cases_to_firebase for user_id: {user_id}, with {len(test_cases)} test cases.")
+    if not db:
+        print("DEBUG: Firebase db object is None. Cannot save test cases.")
+        return ["Firebase not initialized. Cannot save test cases."]
+    
+    confirmations = []
+    try:
+        doc_ref = db.collection('users').document(user_id).collection('test_case_history').document()
+        doc_ref.set({
+            'timestamp': firestore.SERVER_TIMESTAMP,
+            'test_cases': test_cases
+        })
+        confirmations.append(f"Test cases saved to Firebase with ID: {doc_ref.id}")
+        print(f"DEBUG: Successfully saved to Firebase: {doc_ref.id}")
+    except Exception as e:
+        confirmations.append(f"Error saving to Firebase: {e}")
+        print(f"DEBUG: Error saving to Firebase: {e}")
+    return confirmations
 
 @app.route('/')
 def index():
@@ -145,12 +208,18 @@ def handle_generate_and_analyze():
     if 'requirement_file' not in request.files: return jsonify({'error': 'No file part'}), 400
     file = request.files['requirement_file']
     if file.filename == '': return jsonify({'error': 'No selected file'}), 400
+    
+    raw_save_to_firebase_value = request.form.get('save_to_firebase')
+    print(f"DEBUG: Raw save_to_firebase value from request.form: {raw_save_to_firebase_value}")
+    # Correctly interpret 'on' from checkbox as True, and None (if unchecked) as False
+    save_to_firebase = bool(raw_save_to_firebase_value)
+    print(f"DEBUG: save_to_firebase flag after conversion: {save_to_firebase}")
+    firebase_confirmations = []
+
     try:
         file_content = file.read()
-        # Corrected: parse_document now returns a list of chunks
         text_chunks = parse_document(file.filename, file_content)
         
-        # Reconstruct the full text for display and caching
         extracted_text = "\n\n".join(text_chunks)
         document_cache[session['user_id']] = extracted_text
         
@@ -171,6 +240,14 @@ def handle_generate_and_analyze():
             return jsonify({'error': 'The AI did not generate any valid test cases.'}), 500
 
         print("--- All processing complete. ---")
+
+        if save_to_firebase:
+            print("DEBUG: Calling save_test_cases_to_firebase from handle_generate_and_analyze.")
+            firebase_confirmations = save_test_cases_to_firebase(session['user_id'], all_test_cases)
+
+        response_data = {'extracted_text': extracted_text, 'test_cases': all_test_cases}
+        if firebase_confirmations:
+            response_data['firebase_confirmations'] = firebase_confirmations
         
         # --- Automatic Jira Export ---
         jira_confirmations = None
@@ -203,10 +280,6 @@ def handle_generate_and_analyze():
             else:
                 jira_error = "One or more Jira configuration fields were missing."
 
-        response_data = {
-            'extracted_text': extracted_text,
-            'test_cases': all_test_cases
-        }
         if jira_confirmations:
             response_data['jira_confirmations'] = jira_confirmations
         if jira_error:
@@ -254,6 +327,12 @@ def handle_download():
 @app.route('/export_to_jira', methods=['POST'])
 def handle_export_to_jira():
     data = request.get_json()
+    
+    save_to_firebase = data.get('save_to_firebase')
+    firebase_confirmations = []
+
+    print(f"DEBUG: handle_export_to_jira - save_to_firebase flag: {save_to_firebase}")
+
     try:
         # Get Zephyr flag from manual export form
         is_zephyr_api_integration = data.get('is_zephyr_api_integration', False)
@@ -270,7 +349,16 @@ def handle_export_to_jira():
             is_zephyr_api_integration=is_zephyr_api_integration, # Pass the Zephyr API integration flag
             zephyr_api_token=zephyr_api_token # Pass the Zephyr API Token
         )
-        return jsonify({'confirmations': confirmations})
+        
+        if save_to_firebase:
+            print("DEBUG: Calling save_test_cases_to_firebase from handle_export_to_jira.")
+            firebase_confirmations = save_test_cases_to_firebase(session['user_id'], data.get('test_cases'))
+
+        response_data = {'confirmations': confirmations}
+        if firebase_confirmations:
+            response_data['firebase_confirmations'] = firebase_confirmations
+
+        return jsonify(response_data)
     except Exception as e: return jsonify({'error': str(e)}), 500
 
 # The if __name__ == '__main__' block is now removed from this file.

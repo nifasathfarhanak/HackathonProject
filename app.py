@@ -1,3 +1,4 @@
+print("--- Executing app.py ---")
 
 import os
 import json
@@ -9,6 +10,9 @@ from flask import Flask, request, jsonify, render_template, send_file, session
 from dotenv import load_dotenv
 from openpyxl import Workbook
 from fpdf import FPDF
+
+import firebase_admin
+from firebase_admin import credentials, firestore
 
 # Load environment variables from .env file
 load_dotenv()
@@ -22,6 +26,33 @@ from quality_guardian import run_quality_checks
 # Initialize the Flask application
 app = Flask(__name__, template_folder='templates', static_folder='../static')
 app.secret_key = os.urandom(24)
+
+# Initialize Firebase
+try:
+    firebase_credentials_path = os.getenv('FIREBASE_CREDENTIALS')
+    print(f"DEBUG: FIREBASE_CREDENTIALS path from .env: {firebase_credentials_path}")
+    
+    # Fallback to local serviceAccountKey.json if env var not set or path invalid
+    if not firebase_credentials_path or not os.path.exists(firebase_credentials_path):
+        print("DEBUG: FIREBASE_CREDENTIALS env var not set or path invalid. Checking for config/serviceAccountKey.json...")
+        local_credentials_path = os.path.join(os.path.dirname(__file__), 'config', 'serviceAccountKey.json')
+        if os.path.exists(local_credentials_path):
+            firebase_credentials_path = local_credentials_path
+            print(f"DEBUG: Using local serviceAccountKey.json at: {firebase_credentials_path}")
+        else:
+            print("DEBUG: config/serviceAccountKey.json not found either.")
+
+    if firebase_credentials_path and os.path.exists(firebase_credentials_path):
+        cred = credentials.Certificate(firebase_credentials_path)
+        firebase_admin.initialize_app(cred)
+        db = firestore.client()
+        print("Firebase initialized successfully.")
+    else:
+        print("Firebase credentials not found or path is incorrect. Firebase will not be used.")
+        db = None
+except Exception as e:
+    print(f"Error initializing Firebase: {e}")
+    db = None
 
 document_cache = {}
 
@@ -132,6 +163,22 @@ def generate_and_check(chunk):
     checked_test_cases = run_quality_checks(test_cases)
     return checked_test_cases
 
+def save_test_cases_to_firebase(user_id, test_cases):
+    if not db:
+        return ["Firebase not initialized. Cannot save test cases."]
+    
+    confirmations = []
+    try:
+        doc_ref = db.collection('users').document(user_id).collection('test_case_history').document()
+        doc_ref.set({
+            'timestamp': firestore.SERVER_TIMESTAMP,
+            'test_cases': test_cases
+        })
+        confirmations.append(f"Test cases saved to Firebase with ID: {doc_ref.id}")
+    except Exception as e:
+        confirmations.append(f"Error saving to Firebase: {e}")
+    return confirmations
+
 @app.route('/')
 def index():
     if 'user_id' not in session:
@@ -144,6 +191,13 @@ def handle_generate_and_analyze():
     if 'requirement_file' not in request.files: return jsonify({'error': 'No file part'}), 400
     file = request.files['requirement_file']
     if file.filename == '': return jsonify({'error': 'No selected file'}), 400
+    
+    raw_save_to_firebase_value = request.form.get('save_to_firebase')
+    print(f"DEBUG: Raw save_to_firebase value from request.form: {raw_save_to_firebase_value}")
+    save_to_firebase = raw_save_to_firebase_value == 'true'
+    print(f"DEBUG: save_to_firebase flag after conversion: {save_to_firebase}")
+    firebase_confirmations = []
+
     try:
         file_content = file.read()
         text_chunks = parse_document(file.filename, file_content)
@@ -168,7 +222,15 @@ def handle_generate_and_analyze():
             return jsonify({'error': 'The AI did not generate any valid test cases.'}), 500
 
         print("--- All processing complete. ---")
-        return jsonify({'extracted_text': extracted_text, 'test_cases': all_test_cases})
+
+        if save_to_firebase:
+            firebase_confirmations = save_test_cases_to_firebase(session['user_id'], all_test_cases)
+
+        response_data = {'extracted_text': extracted_text, 'test_cases': all_test_cases}
+        if firebase_confirmations:
+            response_data['firebase_confirmations'] = firebase_confirmations
+        
+        return jsonify(response_data)
 
     except Exception as e:
         print(f"Error during generation: {e}")
@@ -192,6 +254,10 @@ def handle_download():
 @app.route('/export_to_jira', methods=['POST'])
 def handle_export_to_jira():
     data = request.get_json()
+    
+    save_to_firebase = data.get('save_to_firebase')
+    firebase_confirmations = []
+
     try:
         confirmations = create_jira_issues(
             jira_server=data.get('server'),
@@ -200,7 +266,15 @@ def handle_export_to_jira():
             project_key=data.get('project_key'),
             test_cases=data.get('test_cases')
         )
-        return jsonify({'confirmations': confirmations})
+        
+        if save_to_firebase:
+            firebase_confirmations = save_test_cases_to_firebase(session['user_id'], data.get('test_cases'))
+
+        response_data = {'confirmations': confirmations}
+        if firebase_confirmations:
+            response_data['firebase_confirmations'] = firebase_confirmations
+
+        return jsonify(response_data)
     except Exception as e: return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':

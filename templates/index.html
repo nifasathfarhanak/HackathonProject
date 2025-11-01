@@ -22,7 +22,7 @@
                     <div class="jira-grid">
                         <input type="text" id="jira-server" name="jira_server" placeholder="Jira Server URL" value="https://nifasathfarhanak.atlassian.net">
                         <input type="email" id="jira-email" name="jira_email" placeholder="Jira Email" value="nifasathfarhanak@gmail.com">
-                        <input type="password" id="jira-token" name="jira_token" placeholder="Jira API Token" value="ATATT3xFfGF0cea1RISNa5_uFVNfc6au1S0HCh-Eo91Wv2Q0hyvwqmbGpUCITudcV84rCavVBQr66bJNCL1-aZ6puTVZcfix5mdEorAgXCG5mMBWImLq85ptL6XLb9i9Ba4cTdzJ1FeDwdcwzOJnotee-Mb_aDBxTpUEVriET5zoBlNOuyN2-sU=5E4BB06E">
+                        <input type="password" id="jira-token" name="jira_token" placeholder="Jira API Token" value="ATATT3xFfGF0OT61REUZ_87t1aWXJVZuo2H-J5V2u5JzCahuLPy6wZCPk3AdAeh5npLbTn8sgE62tTrN-0Od7BQD1_Ckrsd5Hmw7Z7ZCtpqsB6gljYSJjUz3zBp3vGbe94s5_3_H9o_rFKRoQbBZtQogQpL0kp23Yen9957WF49BlvGkr62A7bc=1CF574EE">
                         <input type="text" id="jira-project-key" name="jira_project_key" placeholder="Jira Project Key" value="SCRUM">
                         <input type="password" id="zephyr-api-token" name="zephyr_api_token" placeholder="Zephyr Scale API Token" value="eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJjb250ZXh0Ijp7ImJhc2VVcmwiOiJodHRwczovL25pZmFzYXRoZmFyaGFuYS5hdGxhc3NpYW4ubmV0IiwidXNlciI6eyJhbGciOiJIUzI1NiJ9.eyJjb250ZXh0Ijp7ImJhc2VVcmwiOiJodHRwczovL25pZmFzYXRoZmFyaGFuYS5hdGxhc3NpYW4ubmV0IiwidXNlciI6eyJ\nhY2NvdW50SWQiOiI3MTIwMjA6MjQxMzMzYTMtY2U4Ny00M2FmLWI5MjMtZjJmMDUxNGY\nzZDFkIiwidG9rZW5JZCI6IjM0MjU0NmQyLTU5MzgtND\nE1ZC1iNDFmLTE0ODRhNTdjZmQ5MCJ9fSwiaXNzIjoiY29tLmthbm9haC50ZXN0LW1hbmFnZXIiLCJzdWIiOiIyNGNiZmIzMC00NjkzLTMzZjZmLWEzMTAtNTZkOWI2NDM1MTdhIiwiZXhwIjoxNzkzNTUwNTQ2LCJpYXQiOjE3NjIwMTQ1NDZ9.pilVfHeKTz-WTpe6FGZ5oIFAKL65PtuO9prDKcbwItY">
                     </div>
@@ -34,6 +34,11 @@
                     <div class="zephyr-config">
                         <input type="checkbox" id="jira-zephyr-api-integration" name="is_zephyr_api_integration">
                         <label for="jira-zephyr-api-integration">Use Zephyr Scale API Integration</label>
+                    </div>
+
+                    <div class="firebase-config">
+                        <input type="checkbox" id="save-to-firebase" name="save_to_firebase">
+                        <label for="save-to-firebase">Save to Firebase</label>
                     </div>
 
                     <div id="upload-jira-status"></div>
@@ -82,13 +87,17 @@
                         <div class="jira-grid">
                             <input type="text" id="manual-jira-server" placeholder="Jira Server URL (e.g., https://your-domain.atlassian.net)" value="https://nifasathfarhanak.atlassian.net">
                             <input type="email" id="manual-jira-email" placeholder="Jira Email" value="nifasathfarhanak@gmail.com">
-                            <input type="password" id="manual-jira-token" placeholder="Jira API Token" value="ATATT3xFfGF0cea1RISNa5_uFVNfc6au1S0HCh-Eo91Wv2Q0hyvwqmbGpUCITudcV84rCavVBQr66bJNCL1-aZ6puTVZcfix5mdEorAgXCG5mMBWImLq85ptL6XLb9i9Ba4cTdzJ1FeDwdcwzOJnotee-Mb_aDBxTpUEVriET5zoBlNOuyN2-sU=5E4BB06E">
+                            <input type="password" id="manual-jira-token" placeholder="Jira API Token" value="ATATT3xFfGF0OT61REUZ_87t1aWXJVZuo2H-J5V2u5JzCahuLPy6wZCPk3AdAeh5npLbTn8sgE62tTrN-0Od7BQD1_Ckrsd5Hmw7Z7ZCtpqsB6gljYSJjUz3zBp3vGbe94s5_3_H9o_rFKRoQbBZtQogQpL0kp23Yen9957WF49BlvGkr62A7bc=1CF574EE">
                             <input type="text" id="manual-jira-project-key" placeholder="Jira Project Key (e.g., PROJ)" value="SCRUM">
                             <input type="password" id="manual-zephyr-api-token" name="manual_zephyr_api_token" placeholder="Zephyr Scale API Token" value="eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJjb250ZXh0Ijp7ImJhc2VVcmwiOiJodHRwczovL25pZmFzYXRoZmFyaGFuYWsuYXRsYXNzaWFuLm5ldCIsInVzZXIiOnsiYWNjb3VudElkIjoiNzEyMDIwOjI0MTMzM2EzLWNlODctNDNhZi1iOTIzLWYyZjA1MTRmM2QxZCIsInRva2VuSWQiOiI2MjFhOGQ3Ny1lYjZkLTRmNjYtOTUwMC01NTkxNDE1ZjhjYjkifX0sImlzcyI6ImNvbS5rYW5vYWgudGVzdC1tYW5hZ2VyIiwic3ViIjoiMjRjYmZiMzAtNDY5My0zZjZmLWEzMTAtNTZkOWI2NDM1MTdhIiwiZXhwIjoxNzkzNTUxNzIyLCJpYXQiOjE3NjIwMTU3MjJ9.ys7WKD4S3h2jZm-XxtvSe3pkfn5aI1TpCO3yq7AgO0Y">
                         </div>
                         <div class="zephyr-config">
                             <input type="checkbox" id="manual-jira-zephyr-api-integration" name="manual_is_zephyr_api_integration">
                             <label for="manual-jira-zephyr-api-integration">Use Zephyr Scale API Integration</label>
+                        </div>
+                        <div class="firebase-config">
+                            <input type="checkbox" id="manual-save-to-firebase" name="manual_save_to_firebase">
+                            <label for="manual-save-to-firebase">Save to Firebase</label>
                         </div>
                         <button type="submit">Create Jira Issues Manually</button>
                     </form>
@@ -113,9 +122,15 @@
         const jiraZephyrApiIntegrationCheckbox = document.getElementById('jira-zephyr-api-integration');
         const zephyrApiTokenInput = document.getElementById('zephyr-api-token');
 
+        // Firebase config elements for auto-export
+        const saveToFirebaseCheckbox = document.getElementById('save-to-firebase');
+
         // Zephyr config elements for manual export
         const manualJiraZephyrApiIntegrationCheckbox = document.getElementById('manual-jira-zephyr-api-integration');
         const manualZephyrApiTokenInput = document.getElementById('manual-zephyr-api-token');
+
+        // Firebase config elements for manual export
+        const manualSaveToFirebaseCheckbox = document.getElementById('manual-save-to-firebase');
 
 
         uploadForm.addEventListener('submit', async (e) => {
@@ -128,6 +143,10 @@
             const autoExport = document.getElementById('jira-auto-export').checked;
             const isZephyrApiIntegration = jiraZephyrApiIntegrationCheckbox.checked;
             const zephyrApiToken = zephyrApiTokenInput.value;
+            const saveToFirebase = saveToFirebaseCheckbox.checked;
+
+            console.log(`DEBUG: Frontend - saveToFirebaseCheckbox.checked: ${saveToFirebaseCheckbox.checked}`);
+            console.log(`DEBUG: Frontend - saveToFirebase variable: ${saveToFirebase}`);
 
             // Add Zephyr specific fields to formData if checked
             if (isZephyrApiIntegration) {
@@ -142,6 +161,11 @@
                 formData.append('is_zephyr_api_integration', 'false'); // Explicitly send false if not checked
             }
 
+            // Add Firebase specific field to formData if checked
+            // This block was moved outside the `if (saveToFirebase)` condition
+            // to ensure it's always appended, even if false.
+            formData.append('save_to_firebase', saveToFirebase ? 'true' : 'false');
+
 
             resultsDiv.classList.add('hidden');
             loadingDiv.classList.remove('hidden');
@@ -153,6 +177,9 @@
                 if (isZephyrApiIntegration) {
                     msg += ' (using Zephyr Scale API)';
                 }
+            }
+            if(saveToFirebase) {
+                msg += ' Firebase save will be attempted.';
             }
             loadingMessage.textContent = msg;
 
@@ -177,6 +204,12 @@
                 }
                  if (data.jira_error) {
                     uploadJiraStatusDiv.innerHTML = `<p class="error">Jira Auto-Export Error: ${data.jira_error}</p>`;
+                }
+
+                if (data.firebase_confirmations) {
+                    let confirmationsHtml = uploadJiraStatusDiv.innerHTML + '<h3>Firebase Save Status</h3>';
+                    data.firebase_confirmations.forEach(msg => { confirmationsHtml += `<p class="firebase-confirmation">${msg}</p>`; });
+                    uploadJiraStatusDiv.innerHTML = confirmationsHtml;
                 }
 
 
@@ -321,6 +354,7 @@
             e.preventDefault();
             const isZephyrApiIntegrationManual = manualJiraZephyrApiIntegrationCheckbox.checked;
             const zephyrApiTokenManual = manualZephyrApiTokenInput.value;
+            const manualSaveToFirebase = manualSaveToFirebaseCheckbox.checked;
 
             const jiraConfig = { 
                 server: document.getElementById('manual-jira-server').value, 
@@ -329,7 +363,8 @@
                 project_key: document.getElementById('manual-jira-project-key').value, 
                 test_cases: generatedTestCases,
                 is_zephyr_api_integration: isZephyrApiIntegrationManual,
-                zephyr_api_token: zephyrApiTokenManual
+                zephyr_api_token: zephyrApiTokenManual,
+                save_to_firebase: manualSaveToFirebase
             };
             if (!jiraConfig.server || !jiraConfig.email || !jiraConfig.token || !jiraConfig.project_key) { alert('Please fill in all Jira configuration details for manual export.'); return; }
             
@@ -347,6 +382,13 @@
                 let confirmationsHtml = '<h3>Jira Export Status</h3>';
                 data.confirmations.forEach(msg => { confirmationsHtml += `<p class="jira-confirmation">${msg}</p>`; });
                 jiraStatusDiv.innerHTML = confirmationsHtml;
+
+                if (data.firebase_confirmations) {
+                    let confirmationsHtml = jiraStatusDiv.innerHTML + '<h3>Firebase Save Status</h3>';
+                    data.firebase_confirmations.forEach(msg => { confirmationsHtml += `<p class="firebase-confirmation">${msg}</p>`; });
+                    jiraStatusDiv.innerHTML = confirmationsHtml;
+                }
+
             } catch (error) { jiraStatusDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`; }
         });
     </script>
