@@ -29,8 +29,10 @@ def create_zephyr_test_case(jira_server: str, zephyr_api_token: str, project_key
     
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {zephyr_api_token}" # Use Bearer token for JWT
+        "api_key": zephyr_api_token # Use 'api_key' header for UUID token
     }
+
+    print(f"--- DEBUG: Zephyr Scale API Headers: {headers}") # Debugging line
 
     # Format steps for Zephyr Scale API
     zephyr_steps = []
