@@ -13,7 +13,7 @@ try:
     if not gemini_api_key:
         raise ValueError("GEMINI_API_KEY not found in .env file.")
     genai.configure(api_key=gemini_api_key)
-    gemini_model = genai.GenerativeModel('gemini-2.5-flash-lite')
+    gemini_model = genai.GenerativeModel('gemini-pro-latest')
     print("--- Google AI (API Key) initialized successfully. ---")
 except Exception as e:
     print(f"FATAL ERROR initializing Google AI: {e}")
@@ -141,15 +141,64 @@ def edit_test_cases_with_ai(user_prompt: str, test_cases: list) -> list:
     - If the user's instruction is unclear or cannot be applied, return the original, unchanged text that you were given.
     """
 
+    print("--- DEBUG: AI Editor --- ")
+    print(f"--- PROMPT SENT TO AI ---\n{prompt}\n-------------------------")
+
     try:
         response = gemini_model.generate_content(prompt)
-        # Re-use the reliable text parser
+        print(f"--- RAW AI RESPONSE ---\n{response.text}\n-----------------------")
+        
         updated_test_cases = parse_ai_response_to_dicts(response.text)
+        
         if updated_test_cases:
+            print("--- DEBUG: AI response parsed successfully. ---")
             return updated_test_cases
         else:
-            print("    -> AI editor failed to return valid text format. Reverting changes.")
+            print("--- DEBUG: AI editor failed to return valid text format. Reverting changes. ---")
             return test_cases
     except Exception as e:
-        print(f"    -> An error occurred during AI editing: {e}")
+        print(f"--- DEBUG: An error occurred during AI editing: {e} ---")
         return test_cases
+
+def detect_ambiguity(full_text: str) -> list:
+    """Analyzes the full text of a document for ambiguities using Google AI."""
+    if not gemini_model:
+        raise ConnectionError("Google AI model not initialized.")
+
+    prompt = f"""Your task is to act as an expert requirements analyst. Read the following software requirement document and identify any statements that are ambiguous, subjective, contradictory, or incomplete. For each issue you find, provide the ambiguous phrase, explain why it is an issue, and suggest a clearer alternative.
+
+    **Requirement Document Text:**
+    {full_text}
+
+    **FORMAT:**
+    Provide your response as a JSON array of objects, where each object has the keys "phrase", "issue", and "suggestion".
+
+    **Example:**
+    [ 
+        {{
+            "phrase": "The system should respond to users quickly.",
+            "issue": "The term 'quickly' is subjective and not measurable.",
+            "suggestion": "The system should respond to user requests within 500ms under 95% load."
+        }},
+        {{
+            "phrase": "The interface should be user-friendly.",
+            "issue": "'User-friendly' is subjective and lacks specific criteria.",
+            "suggestion": "The interface should adhere to the company's UX design system and require no more than 3 clicks for a user to complete core tasks."
+        }}
+    ]
+
+    **INSTRUCTIONS:**
+    - You MUST return a valid JSON array.
+    - If no ambiguities are found, return an empty array `[]`.
+    """
+
+    try:
+        response = gemini_model.generate_content(prompt)
+        # Clean the response to ensure it's valid JSON
+        cleaned_text = response.text.strip().replace('\n', '').replace('```json', '').replace('```', '')
+        report = json.loads(cleaned_text)
+        return report
+    except (json.JSONDecodeError, Exception) as e:
+        print(f"    -> An error occurred during ambiguity detection: {e}")
+        # Return a structured error message for the frontend
+        return [{ "phrase": "Error during analysis", "issue": str(e), "suggestion": "Could not generate ambiguity report." }]

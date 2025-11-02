@@ -5,6 +5,34 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI-Powered Test Case Generator</title>
     <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .page-layout {
+            display: flex;
+            flex-direction: row;
+            gap: 20px;
+            align-items: flex-start;
+            height: calc(100vh - 150px); /* Adjust based on header height */
+        }
+        .sidebar {
+            width: 35%;
+            min-width: 450px;
+            height: 100%;
+            overflow-y: auto; /* Add scrollbar to sidebar */
+            padding-right: 10px;
+        }
+        .main-content-area {
+            width: 65%;
+            height: 100%;
+            overflow-y: auto; /* Add scrollbar to main content */
+        }
+        .boxed-section {
+            border: 1px solid #ccc;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -13,56 +41,18 @@
             <p>Upload a software requirement document to begin.</p>
         </header>
 
-        <div class="main-content">
-            <div class="upload-section">
-                <h2>1. Upload Document & Configure</h2>
-                <form id="upload-form" enctype="multipart/form-data">
-                    <input type="file" id="file-input" name="requirement_file" accept=".pdf,.docx,.xml,.md,.txt" required>
-                    
-                    <div class="jira-grid">
-                        <input type="text" id="jira-server" name="jira_server" placeholder="Jira Server URL" value="https://nifasathfarhanak.atlassian.net">
-                        <input type="email" id="jira-email" name="jira_email" placeholder="Jira Email" value="nifasathfarhanak@gmail.com">
-                        <input type="password" id="jira-token" name="jira_token" placeholder="Jira API Token" value="ATATT3xFfGF0OT61REUZ_87t1aWXJVZuo2H-J5V2u5JzCahuLPy6wZCPk3AdAeh5npLbTn8sgE62tTrN-0Od7BQD1_Ckrsd5Hmw7Z7ZCtpqsB6gljYSJjUz3zBp3vGbe94s5_3_H9o_rFKRoQbBZtQogQpL0kp23Yen9957WF49BlvGkr62A7bc=1CF574EE">
-                        <input type="text" id="jira-project-key" name="jira_project_key" placeholder="Jira Project Key" value="SCRUM">
-                        <input type="password" id="zephyr-api-token" name="zephyr_api_token" placeholder="Zephyr Scale API Token" value="eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJjb250ZXh0Ijp7ImJhc2VVcmwiOiJodHRwczovL25pZmFzYXRoZmFyaGFuYS5hdGxhc3NpYW4ubmV0IiwidXNlciI6eyJhbGciOiJIUzI1NiJ9.eyJjb250ZXh0Ijp7ImJhc2VVcmwiOiJodHRwczovL25pZmFzYXRoZmFyaGFuYS5hdGxhc3NpYW4ubmV0IiwidXNlciI6eyJ\nhY2NvdW50SWQiOiI3MTIwMjA6MjQxMzMzYTMtY2U4Ny00M2FmLWI5MjMtZjJmMDUxNGY\nzZDFkIiwidG9rZW5JZCI6IjM0MjU0NmQyLTU5MzgtND\nE1ZC1iNDFmLTE0ODRhNTdjZmQ5MCJ9fSwiaXNzIjoiY29tLmthbm9haC50ZXN0LW1hbmFnZXIiLCJzdWIiOiIyNGNiZmIzMC00NjkzLTMzZjZmLWEzMTAtNTZkOWI2NDM1MTdhIiwiZXhwIjoxNzkzNTUwNTQ2LCJpYXQiOjE3NjIwMTQ1NDZ9.pilVfHeKTz-WTpe6FGZ5oIFAKL65PtuO9prDKcbwItY">
+        <div class="page-layout">
+            <!-- Left Pane: Sidebar -->
+            <div class="sidebar">
+                <div id="dashboard" class="dashboard-section">
+                    <h2>Results Dashboard</h2>
+                    <div style="width: 100%; margin: auto; margin-bottom: 20px;">
+                        <canvas id="dashboard-chart"></canvas>
                     </div>
-                    <div>
-                        <input type="checkbox" id="jira-auto-export" name="jira_auto_export">
-                        <label for="jira-auto-export">Automatically create Jira issues on generate</label>
-                    </div>
-
-                    <div class="zephyr-config">
-                        <input type="checkbox" id="jira-zephyr-api-integration" name="is_zephyr_api_integration">
-                        <label for="jira-zephyr-api-integration">Use Zephyr Scale API Integration</label>
-                    </div>
-
-                    <div class="firebase-config">
-                        <input type="checkbox" id="save-to-firebase" name="save_to_firebase">
-                        <label for="save-to-firebase">Save to Firebase</label>
-                    </div>
-
-                    <div id="upload-jira-status"></div>
-
-                    <button type="submit">Generate & Analyze Test Cases</button>
-                </form>
-            </div>
-
-            <div id="loading" class="hidden">
-                <p id="loading-message">Processing... This may take a few moments.</p>
-            </div>
-
-            <div id="results" class="hidden">
-                <div class="results-grid">
-                    <div class="grid-item">
-                        <h2>Extracted Text</h2>
-                        <textarea id="extracted-text" readonly></textarea>
-                    </div>
-                    <div class="grid-item">
-                        <h2>Generated Test Cases <span class="quality-legend">(<span class="highlight-fail"></span>Needs Review)</span></h2>
-                        <div id="test-case-table-container"></div>
+                    <div style="width: 100%; margin: auto;">
+                        <canvas id="test-type-chart"></canvas>
                     </div>
                 </div>
-
                 <div id="agent-builder-chat-container" class="chat-section">
                     <h2>Edit Test Cases with AI</h2>
                     <div id="chat-history"></div>
@@ -71,7 +61,13 @@
                         <button type="submit">Send</button>
                     </form>
                 </div>
-
+                 <div id="ambiguity-report-container" class="ambiguity-section hidden">
+                    <h2>AI-Powered Ambiguity Report</h2>
+                    <p>The AI has analyzed your document for potential ambiguities. Download the report for details.</p>
+                    <div id="ambiguity-download-buttons">
+                        <button class="download-btn" id="download-ambiguity-txt">Download as TXT</button>
+                    </div>
+                </div>
                 <div class="download-section">
                     <h2>Download Test Cases</h2>
                     <div id="download-buttons">
@@ -80,16 +76,15 @@
                         <button class="download-btn" data-format="txt">Download as TXT</button>
                     </div>
                 </div>
-                
                 <div class="jira-section">
                     <h2>Export to Jira (Manual)</h2>
                     <form id="jira-form">
                         <div class="jira-grid">
-                            <input type="text" id="manual-jira-server" placeholder="Jira Server URL (e.g., https://your-domain.atlassian.net)" value="https://nifasathfarhanak.atlassian.net">
+                            <input type="text" id="manual-jira-server" placeholder="Jira Server URL" value="https://nifasathfarhanak.atlassian.net">
                             <input type="email" id="manual-jira-email" placeholder="Jira Email" value="nifasathfarhanak@gmail.com">
-                            <input type="password" id="manual-jira-token" placeholder="Jira API Token" value="ATATT3xFfGF0OT61REUZ_87t1aWXJVZuo2H-J5V2u5JzCahuLPy6wZCPk3AdAeh5npLbTn8sgE62tTrN-0Od7BQD1_Ckrsd5Hmw7Z7ZCtpqsB6gljYSJjUz3zBp3vGbe94s5_3_H9o_rFKRoQbBZtQogQpL0kp23Yen9957WF49BlvGkr62A7bc=1CF574EE">
-                            <input type="text" id="manual-jira-project-key" placeholder="Jira Project Key (e.g., PROJ)" value="SCRUM">
-                            <input type="password" id="manual-zephyr-api-token" name="manual_zephyr_api_token" placeholder="Zephyr Scale API Token" value="eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJjb250ZXh0Ijp7ImJhc2VVcmwiOiJodHRwczovL25pZmFzYXRoZmFyaGFuYWsuYXRsYXNzaWFuLm5ldCIsInVzZXIiOnsiYWNjb3VudElkIjoiNzEyMDIwOjI0MTMzM2EzLWNlODctNDNhZi1iOTIzLWYyZjA1MTRmM2QxZCIsInRva2VuSWQiOiI2MjFhOGQ3Ny1lYjZkLTRmNjYtOTUwMC01NTkxNDE1ZjhjYjkifX0sImlzcyI6ImNvbS5rYW5vYWgudGVzdC1tYW5hZ2VyIiwic3ViIjoiMjRjYmZiMzAtNDY5My0zZjZmLWEzMTAtNTZkOWI2NDM1MTdhIiwiZXhwIjoxNzkzNTUxNzIyLCJpYXQiOjE3NjIwMTU3MjJ9.ys7WKD4S3h2jZm-XxtvSe3pkfn5aI1TpCO3yq7AgO0Y">
+                            <input type="password" id="manual-jira-token" placeholder="Jira API Token" value="ATATT3xFfGF08wgzjrbDiY5Zo1ICBGbVjJaEGHCedN1iQl17dBmx_Vae5qCy21v7z45rvht-bVP6ZApW6xn0pUd81NAbf6HGFk-I_qk7GkDkBOLTiBr-xBUXnBUnUBi3twMjwMm5Un87PwHYeoI-BE_M-AoRSg-jQaZuGhNWSBtWc2ixGn4AVfo=364D2636">
+                            <input type="text" id="manual-jira-project-key" placeholder="Jira Project Key" value="SCRUM">
+                            <input type="password" id="manual-zephyr-api-token" name="manual_zephyr_api_token" placeholder="Zephyr Scale API Token" value="eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJjb250ZXh0Ijp7ImJhc2VVcmwiOiJodHRwczovL25pZmFzYXRoZmFyaGFuYWsuYXRsYXNzaWFuLm5ldCIsInVzZXIiOnsiYWNjb3VudElkIjoiNzEyMDIwOjI0MTMzM2EzLWNlODctNDNhZi1iOTIzLWYyZjA1MTRmM2QxZCIsInRva2VuSWQiOiJhZjQ5NDI4Yy1lNDVkLTQ4MDMtYjM0OC1hNGEwYTg1ZjlmN2YifX0sImlzcyI6ImNvbS5rYW5vYWgudGVzdC1tYW5hZ2VyIiwic3ViIjoiMjRjYmZiMzAtNDY5My0zZjZmLWEzMTAtNTZkOWI2NDM1MTdhIiwiZXhwIjoxNzkzNjMwMTU1LCJpYXQiOjE3NjIwOTQxNTV9.TVO1GQzhn3XK8-4GzZN2qkEE8VauB9Xt9vCDkhmJ14o">
                         </div>
                         <div class="zephyr-config">
                             <input type="checkbox" id="manual-jira-zephyr-api-integration" name="manual_is_zephyr_api_integration">
@@ -104,6 +99,50 @@
                     <div id="jira-status"></div>
                 </div>
             </div>
+
+            <!-- Right Pane: Main Content -->
+            <div class="main-content-area">
+                <div class="upload-section">
+                    <h2>1. Upload Document & Configure</h2>
+                    <form id="upload-form" enctype="multipart/form-data">
+                        <input type="file" id="file-input" name="requirement_file" accept=".pdf,.docx,.xml,.md,.txt" required>
+                        
+                        <div class="jira-grid">
+                            <input type="text" id="jira-server" name="jira_server" placeholder="Jira Server URL" value="https://nifasathfarhanak.atlassian.net">
+                            <input type="email" id="jira-email" name="jira_email" placeholder="Jira Email" value="nifasathfarhanak@gmail.com">
+                            <input type="password" id="jira-token" name="jira_token" placeholder="Jira API Token" value="ATATT3xFfGF08wgzjrbDiY5Zo1ICBGbVjJaEGHCedN1iQl17dBmx_Vae5qCy21v7z45rvht-bVP6ZApW6xn0pUd81NAbf6HGFk-I_qk7GkDkBOLTiBr-xBUXnBUnUBi3twMjwMm5Un87PwHYeoI-BE_M-AoRSg-jQaZuGhNWSBtWc2ixGn4AVfo=364D2636">
+                            <input type="text" id="jira-project-key" name="jira_project_key" placeholder="Jira Project Key" value="SCRUM">
+                            <input type="password" id="zephyr-api-token" name="zephyr_api_token" placeholder="Zephyr Scale API Token" value="eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJjb250ZXh0Ijp7ImJhc2VVcmwiOiJodHRwczovL25pZmFzYXRoZmFyaGFuYWsuYXRsYXNzaWFuLm5ldCIsInVzZXIiOnsiYWNjb3VudElkIjoiNzEyMDIwOjI0MTMzM2EzLWNlODctNDNhZi1iOTIzLWYyZjA1MTRmM2QxZCIsInRva2VuSWQiOiJhZjQ5NDI4Yy1lNDVkLTQ4MDMtYjM0OC1hNGEwYTg1ZjlmN2YifX0sImlzcyI6ImNvbS5rYW5vYWgudGVzdC1tYW5hZ2VyIiwic3ViIjoiMjRjYmZiMzAtNDY5My0zZjZmLWEzMTAtNTZkOWI2NDM1MTdhIiwiZXhwIjoxNzkzNjMwMTU1LCJpYXQiOjE3NjIwOTQxNTV9.TVO1GQzhn3XK8-4GzZN2qkEE8VauB9Xt9vCDkhmJ14o">
+                        </div>
+
+                        <div class="zephyr-config">
+                            <input type="checkbox" id="jira-zephyr-api-integration" name="is_zephyr_api_integration">
+                            <label for="jira-zephyr-api-integration">Use Zephyr Scale API Integration</label>
+                        </div>
+                        <div class="firebase-config">
+                            <input type="checkbox" id="save-to-firebase" name="save_to_firebase">
+                            <label for="save-to-firebase">Save to Firebase</label>
+                        </div>
+                        <div id="upload-jira-status"></div>
+                        <button type="submit">Generate & Analyze Test Cases</button>
+                    </form>
+                </div>
+
+                <div id="loading" class="hidden">
+                    <p id="loading-message">Processing... This may take a few moments.</p>
+                </div>
+
+                <div id="results" class="hidden">
+                    <div class="boxed-section">
+                        <h2>Generated Test Cases <span class="quality-legend">(<span class="highlight-fail"></span>Needs Review)</span></h2>
+                        <div id="test-case-table-container"></div>
+                    </div>
+                    <div class="boxed-section">
+                        <h2>Extracted Text</h2>
+                        <textarea id="extracted-text" readonly></textarea>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -115,21 +154,18 @@
         const extractedTextEl = document.getElementById('extracted-text');
         const testCaseContainer = document.getElementById('test-case-table-container');
         const uploadJiraStatusDiv = document.getElementById('upload-jira-status');
+        const ambiguityReportContainer = document.getElementById('ambiguity-report-container');
+        const ambiguityDownloadButtons = document.getElementById('ambiguity-download-buttons');
+        const dashboardChartCanvas = document.getElementById('dashboard-chart');
+        const testTypeChartCanvas = document.getElementById('test-type-chart');
+        let dashboardChart = null;
+        let testTypeChart = null;
 
         let generatedTestCases = [];
 
-        // Zephyr config elements for auto-export
         const jiraZephyrApiIntegrationCheckbox = document.getElementById('jira-zephyr-api-integration');
-        const zephyrApiTokenInput = document.getElementById('zephyr-api-token');
-
-        // Firebase config elements for auto-export
         const saveToFirebaseCheckbox = document.getElementById('save-to-firebase');
-
-        // Zephyr config elements for manual export
         const manualJiraZephyrApiIntegrationCheckbox = document.getElementById('manual-jira-zephyr-api-integration');
-        const manualZephyrApiTokenInput = document.getElementById('manual-zephyr-api-token');
-
-        // Firebase config elements for manual export
         const manualSaveToFirebaseCheckbox = document.getElementById('manual-save-to-firebase');
 
 
@@ -140,52 +176,33 @@
             if (!fileInput.files.length) { alert('Please select a file.'); return; }
 
             const formData = new FormData(uploadForm);
-            const autoExport = document.getElementById('jira-auto-export').checked;
-            const isZephyrApiIntegration = jiraZephyrApiIntegrationCheckbox.checked;
-            const zephyrApiToken = zephyrApiTokenInput.value;
-            const saveToFirebase = saveToFirebaseCheckbox.checked;
-
-            console.log(`DEBUG: Frontend - saveToFirebaseCheckbox.checked: ${saveToFirebaseCheckbox.checked}`);
-            console.log(`DEBUG: Frontend - saveToFirebase variable: ${saveToFirebase}`);
-
-            // Add Zephyr specific fields to formData if checked
-            if (isZephyrApiIntegration) {
-                formData.append('is_zephyr_api_integration', 'true');
-                if (!zephyrApiToken) {
-                    alert('Please provide the Zephyr Scale API Token for API integration.');
-                    loadingDiv.classList.add('hidden');
-                    return;
-                }
-                formData.append('zephyr_api_token', zephyrApiToken);
-            } else {
-                formData.append('is_zephyr_api_integration', 'false'); // Explicitly send false if not checked
-            }
-
-            // Add Firebase specific field to formData if checked
-            // This block was moved outside the `if (saveToFirebase)` condition
-            // to ensure it's always appended, even if false.
-            formData.append('save_to_firebase', saveToFirebase ? 'true' : 'false');
-
 
             resultsDiv.classList.add('hidden');
             loadingDiv.classList.remove('hidden');
             uploadJiraStatusDiv.innerHTML = '';
+            ambiguityReportContainer.classList.add('hidden');
             
-            let msg = 'Processing... The AI is generating and validating test cases.';
-            if(autoExport) {
-                msg += ' Jira export will be attempted.';
-                if (isZephyrApiIntegration) {
-                    msg += ' (using Zephyr Scale API)';
-                }
-            }
-            if(saveToFirebase) {
-                msg += ' Firebase save will be attempted.';
-            }
-            loadingMessage.textContent = msg;
+            const messages = [
+                'Parsing document...',
+                'Detecting requirement ambiguities with AI...',
+                'Generating test cases with Google AI...',
+                'Running quality checks...',
+                'Finalizing results...'
+            ];
+            let messageIndex = 0;
+            loadingMessage.textContent = messages[messageIndex];
+            const messageInterval = setInterval(() => {
+                messageIndex = (messageIndex + 1) % messages.length;
+                loadingMessage.textContent = messages[messageIndex];
+            }, 3000);
 
 
             try {
                 const response = await fetch('/generate_and_analyze', { method: 'POST', body: formData });
+                
+                clearInterval(messageInterval);
+                loadingMessage.textContent = 'Processing complete!';
+
                 const data = await response.json();
 
                 if (!response.ok) {
@@ -195,6 +212,16 @@
                 extractedTextEl.value = data.extracted_text;
                 generatedTestCases = data.test_cases;
                 renderTestCases(generatedTestCases);
+                
+                if (data.ambiguity_report && data.ambiguity_report.length > 0) {
+                    ambiguityReportContainer.classList.remove('hidden');
+                }
+
+                if (data.dashboard_stats) {
+                    renderDashboardChart(data.dashboard_stats);
+                    renderTestCaseTypeChart(generatedTestCases);
+                }
+
                 resultsDiv.classList.remove('hidden');
 
                 if (data.jira_confirmations) {
@@ -214,6 +241,7 @@
 
 
             } catch (error) {
+                clearInterval(messageInterval);
                 alert(`Error: ${error.message}`);
             } finally {
                 loadingDiv.classList.add('hidden');
@@ -272,6 +300,96 @@
             testCaseContainer.innerHTML = '';
             testCaseContainer.appendChild(table);
         }
+
+        function renderDashboardChart(stats) {
+            if (dashboardChart) {
+                dashboardChart.destroy();
+            }
+            const needsReview = stats.total_generated - stats.valid_cases;
+            dashboardChart = new Chart(dashboardChartCanvas, {
+                type: 'pie',
+                data: {
+                    labels: ['Valid Test Cases', 'Needs Review'],
+                    datasets: [{
+                        label: 'Test Case Quality',
+                        data: [stats.valid_cases, needsReview],
+                        backgroundColor: [
+                            'rgba(75, 192, 192, 0.8)', // Green
+                            'rgba(255, 99, 132, 0.8)'  // Red
+                        ],
+                        borderColor: [
+                            'rgba(75, 192, 192, 1)',
+                            'rgba(255, 99, 132, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        title: {
+                            display: true,
+                            text: `Total Generated: ${stats.total_generated}`
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderTestCaseTypeChart(testCases) {
+            if (testTypeChart) {
+                testTypeChart.destroy();
+            }
+            const typeCounts = testCases.reduce((acc, tc) => {
+                const type = tc.test_type || 'Unknown';
+                acc[type] = (acc[type] || 0) + 1;
+                return acc;
+            }, {});
+
+            const labels = Object.keys(typeCounts);
+            const data = Object.values(typeCounts);
+
+            testTypeChart = new Chart(testTypeChartCanvas, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Test Case Types',
+                        data: data,
+                        backgroundColor: [
+                            'rgba(54, 162, 235, 0.8)',
+                            'rgba(255, 206, 86, 0.8)',
+                            'rgba(153, 102, 255, 0.8)',
+                            'rgba(255, 159, 64, 0.8)',
+                            'rgba(201, 203, 207, 0.8)',
+                            'rgba(75, 192, 192, 0.8)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        title: {
+                            display: true,
+                            text: 'Test Case Type Distribution'
+                        }
+                    }
+                }
+            });
+        }
+
+        ambiguityDownloadButtons.addEventListener('click', (e) => {
+            if (e.target.id === 'download-ambiguity-txt') {
+                window.location.href = '/download_ambiguity_report?format=txt';
+            }
+        });
 
         
         const jiraForm = document.getElementById('jira-form');
@@ -353,7 +471,7 @@
         jiraForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const isZephyrApiIntegrationManual = manualJiraZephyrApiIntegrationCheckbox.checked;
-            const zephyrApiTokenManual = manualZephyrApiTokenInput.value;
+            const zephyrApiTokenManual = document.getElementById('manual-zephyr-api-token').value;
             const manualSaveToFirebase = manualSaveToFirebaseCheckbox.checked;
 
             const jiraConfig = { 

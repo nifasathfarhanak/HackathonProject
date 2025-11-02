@@ -20,7 +20,7 @@ load_dotenv()
 # Corrected: Use absolute imports as 'src' is on the path
 from document_parser import parse_document
 # Corrected: Import the new simplified function
-from test_generator import generate_test_cases_from_chunk, edit_test_cases_with_ai
+from test_generator import generate_test_cases_from_chunk, edit_test_cases_with_ai, detect_ambiguity
 from alm_integrator import create_jira_issues # Keep this import
 from quality_guardian import run_quality_checks # Re-enable quality checks
 
@@ -124,14 +124,18 @@ def create_pdf(test_cases, headers):
         max_height = 0
         for i, item in enumerate(row):
             pdf.set_font("Arial", size=8)
-            num_lines = len(pdf.multi_cell(col_widths[i], 5, item, split_only=True))
+            # Sanitize text for PDF generation
+            sanitized_item = item.encode('latin-1', 'replace').decode('latin-1')
+            num_lines = len(pdf.multi_cell(col_widths[i], 5, sanitized_item, split_only=True))
             cell_height = num_lines * 5
             if cell_height > max_height:
                 max_height = cell_height
 
         pdf.set_y(y_before)
         for i, item in enumerate(row):
-            pdf.multi_cell(col_widths[i], max_height, item, border=1, align='L')
+            # Sanitize text for PDF generation
+            sanitized_item = item.encode('latin-1', 'replace').decode('latin-1')
+            pdf.multi_cell(col_widths[i], max_height, sanitized_item, border=1, align='L')
             if i < len(row) - 1:
                 pdf.set_y(y_before)
                 pdf.set_x(pdf.get_x() + col_widths[i])
@@ -152,6 +156,18 @@ def create_txt(test_cases, headers):
                 output.write(f"RTM Compliance Mapping: {rtm}\n")
             else:
                 output.write(f"{header.replace('_', ' ').title()}: {tc.get(header, 'N/A')}\n")
+        output.write("-" * 30 + "\n")
+    return io.BytesIO(output.getvalue().encode('utf-8'))
+
+# --- New Helper Functions for Ambiguity Report Download ---
+def create_ambiguity_report_txt(report):
+    output = io.StringIO()
+    output.write("AI-Powered Ambiguity Report\n")
+    output.write("=" * 30 + "\n\n")
+    for item in report:
+        output.write(f"Ambiguous Phrase: {item.get('phrase', 'N/A')}\n")
+        output.write(f"Issue: {item.get('issue', 'N/A')}\n")
+        output.write(f"Suggestion: {item.get('suggestion', 'N/A')}\n")
         output.write("-" * 30 + "\n")
     return io.BytesIO(output.getvalue().encode('utf-8'))
 
@@ -222,6 +238,12 @@ def handle_generate_and_analyze():
         
         extracted_text = "\n\n".join(text_chunks)
         document_cache[session['user_id']] = extracted_text
+
+        # --- New: Ambiguity Detection ---
+        print("--- Detecting requirement ambiguity... ---")
+        ambiguity_report = detect_ambiguity(extracted_text)
+        session['ambiguity_report'] = ambiguity_report # Store in session for download
+        print(f"--- Ambiguity detection complete. Found {len(ambiguity_report)} potential issues. ---")
         
         print(f"--- Found {len(text_chunks)} chunks. Processing in parallel... ---")
 
@@ -245,7 +267,20 @@ def handle_generate_and_analyze():
             print("DEBUG: Calling save_test_cases_to_firebase from handle_generate_and_analyze.")
             firebase_confirmations = save_test_cases_to_firebase(session['user_id'], all_test_cases)
 
-        response_data = {'extracted_text': extracted_text, 'test_cases': all_test_cases}
+        # --- New: Dashboard Stats ---
+        total_generated = len(all_test_cases)
+        valid_cases = sum(1 for tc in all_test_cases if tc.get('quality_assessment', {}).get('passed', True))
+        dashboard_stats = {
+            'total_generated': total_generated,
+            'valid_cases': valid_cases
+        }
+
+        response_data = {
+            'extracted_text': extracted_text, 
+            'test_cases': all_test_cases,
+            'ambiguity_report': ambiguity_report, # Keep for potential future use, but UI will use download
+            'dashboard_stats': dashboard_stats
+        }
         if firebase_confirmations:
             response_data['firebase_confirmations'] = firebase_confirmations
         
@@ -298,14 +333,23 @@ def handle_edit_test_cases():
     user_prompt = data.get('prompt')
     test_cases = data.get('test_cases')
 
+    print(f"DEBUG: handle_edit_test_cases - Received prompt: {user_prompt}")
+    print(f"DEBUG: handle_edit_test_cases - Received {len(test_cases)} test cases.")
+
     if not user_prompt or not test_cases:
+        print("DEBUG: handle_edit_test_cases - Missing prompt or test cases.")
         return jsonify({'error': 'A prompt and a list of test cases are required.'}), 400
 
     try:
         updated_test_cases = edit_test_cases_with_ai(user_prompt, test_cases)
+        print(f"DEBUG: handle_edit_test_cases - Returned {len(updated_test_cases)} updated test cases.")
+        # Check if the test cases actually changed
+        if updated_test_cases == test_cases:
+            print("DEBUG: handle_edit_test_cases - WARNING: edit_test_cases_with_ai returned identical test cases.")
+
         return jsonify({'test_cases': updated_test_cases})
     except Exception as e:
-        print(f"Error during test case editing: {e}")
+        print(f"DEBUG: Error during test case editing: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/download', methods=['POST'])
@@ -322,6 +366,21 @@ def handle_download():
     try:
         file_buffer = generator(test_cases, HEADERS)
         return send_file(file_buffer, as_attachment=True, download_name=f'test-cases.{format}', mimetype=f'application/{format}')
+    except Exception as e: return jsonify({'error': str(e)}), 500
+
+@app.route('/download_ambiguity_report', methods=['GET'])
+def handle_download_ambiguity_report():
+    format = request.args.get('format', 'txt')
+    report = session.get('ambiguity_report')
+    if not report: return jsonify({'error': 'No ambiguity report found in session.'}), 400
+
+    file_generators = {'txt': create_ambiguity_report_txt}
+    generator = file_generators.get(format)
+    if not generator: return jsonify({'error': 'Invalid format'}), 400
+
+    try:
+        file_buffer = generator(report)
+        return send_file(file_buffer, as_attachment=True, download_name=f'ambiguity-report.{format}', mimetype=f'application/{format}')
     except Exception as e: return jsonify({'error': str(e)}), 500
 
 @app.route('/export_to_jira', methods=['POST'])
