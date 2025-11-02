@@ -280,8 +280,7 @@
                         const assessment = tc.quality_assessment || { passed: true, checks: [] };
                         const failedChecks = assessment.checks.filter(c => !c.passed);
                         const rowClass = !assessment.passed ? 'quality-fail' : '';
-                        const tooltip = !assessment.passed ? `Quality Issues Found:\n${failedChecks.map(c => `- ${c.check}: ${c.notes}`).join('
-')}` : 'Quality check passed.';
+                        const tooltip = !assessment.passed ? `Quality Issues Found:\n${failedChecks.map(c => `- ${c.check}: ${c.notes}`).join('\n')}` : 'Quality check passed.';
                         
                         return `
                         <tr class="${rowClass}" title="${tooltip}">
