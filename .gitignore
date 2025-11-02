@@ -1,11 +1,9 @@
-# Ignore environment files
+# Environment variables
 .env
 
-# Ignore Python virtual environment
-venv/
+# Service account keys
+config/serviceAccountKey.json
 
-# Ignore Python cache
-__pycache__/
+# Python cache
 *.pyc
-*.env
-*.json
+__pycache__/
